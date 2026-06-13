@@ -1,20 +1,20 @@
 """API router for route optimization."""
 from __future__ import annotations
 
-from typing import Any
-from uuid import UUID
+import random
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.user import User
 from app.security.deps import get_current_user
+from app.services.optimizer.benchmark import run_benchmark
 from app.services.optimizer.solver import (
-    OptResult,
     OptStop,
     OptVehicle,
     solve,
 )
+from app.synthetic.generator import generate_stops
 
 router = APIRouter(prefix="/api/optimize", tags=["optimize"])
 
@@ -150,4 +150,83 @@ async def optimize_routes(
         total_stops_skipped=result.total_stops_skipped,
         objective_value=result.objective_value,
         solver_wall_time_ms=result.solver_wall_time_ms,
+    )
+
+
+class BenchmarkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    n_stops: int = Field(default=30, ge=5, le=100)
+    n_vehicles: int = Field(default=3, ge=1, le=10)
+    time_limit_seconds: int = Field(default=5, ge=1, le=30)
+    seed: int | None = Field(default=None, ge=0, le=2**31)
+
+
+class SolverBenchmarkOutput(BaseModel):
+    solver: str
+    feasible: bool
+    total_route_seconds: int
+    num_routes: int
+    stops_visited: int
+    wall_time_ms: int
+
+
+class BenchmarkResponse(BaseModel):
+    n_stops: int
+    n_vehicles: int
+    ortools: SolverBenchmarkOutput
+    pyvrp: SolverBenchmarkOutput
+    gap_pct: float  # PyVRP vs OR-Tools total route time (− means OR-Tools shorter)
+
+
+@router.post("/benchmark", response_model=BenchmarkResponse)
+async def benchmark_solvers(
+    body: BenchmarkRequest,
+    _user: User = Depends(get_current_user),
+) -> BenchmarkResponse:
+    """Solve one base VRPTW instance with OR-Tools and PyVRP, and compare.
+
+    Both solvers route the same synthetic instance with every stop required,
+    so the result is an apples-to-apples quality + wall-clock comparison.
+    """
+    seed = body.seed if body.seed is not None else random.randint(0, 2**31)  # noqa: S311
+    rng = random.Random(seed)
+    synth = generate_stops(n_stops=body.n_stops, seed=seed)
+    stops = [
+        OptStop(
+            index=i,
+            stop_id=s["id"],
+            latitude=s["latitude"],
+            longitude=s["longitude"],
+            demand=1,
+            parcel_size=rng.choice(["60", "80", "100", "120"]),
+            floor=s.get("floor"),
+            address_type=s["address_type"],
+        )
+        for i, s in enumerate(synth)
+    ]
+    vehicles = [
+        OptVehicle(
+            index=i,
+            vehicle_id=f"v-{i}",
+            capacity=max(20, body.n_stops // body.n_vehicles + 5),
+            max_route_seconds=28800,
+        )
+        for i in range(body.n_vehicles)
+    ]
+
+    result = run_benchmark(
+        35.672, 139.817, stops, vehicles,
+        time_limit_seconds=body.time_limit_seconds,
+    )
+    ort_s = result.ortools.total_route_seconds
+    gap = (
+        (result.pyvrp.total_route_seconds - ort_s) / ort_s * 100
+        if ort_s > 0 else 0.0
+    )
+    return BenchmarkResponse(
+        n_stops=result.n_stops,
+        n_vehicles=result.n_vehicles,
+        ortools=SolverBenchmarkOutput(**result.ortools.__dict__),
+        pyvrp=SolverBenchmarkOutput(**result.pyvrp.__dict__),
+        gap_pct=round(gap, 2),
     )

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useRunSimulation, useRunMonteCarlo } from '@/api/client';
-import type { SimulationResult, MonteCarloResult } from '@/api/client';
+import { useRunSimulation, useRunMonteCarlo, useRunBenchmark } from '@/api/client';
+import type { SimulationResult, MonteCarloResult, BenchmarkResult } from '@/api/client';
 import { useAppStore } from '@/store/app';
 
 const SLOT_OPTIONS = [
@@ -158,8 +158,85 @@ function MCResultView({ result }: { result: MonteCarloResult }) {
   );
 }
 
+function fmtMin(seconds: number): string {
+  return `${Math.round(seconds / 60)} min`;
+}
+
+function BenchmarkView({ result }: { result: BenchmarkResult }) {
+  const rows = [
+    {
+      label: 'Total route time',
+      ort: fmtMin(result.ortools.total_route_seconds),
+      pyvrp: fmtMin(result.pyvrp.total_route_seconds),
+    },
+    {
+      label: 'Vehicles used',
+      ort: String(result.ortools.num_routes),
+      pyvrp: String(result.pyvrp.num_routes),
+    },
+    {
+      label: 'Stops routed',
+      ort: `${result.ortools.stops_visited}/${result.n_stops}`,
+      pyvrp: `${result.pyvrp.stops_visited}/${result.n_stops}`,
+    },
+    {
+      label: 'Wall-clock',
+      ort: `${(result.ortools.wall_time_ms / 1000).toFixed(1)}s`,
+      pyvrp: `${(result.pyvrp.wall_time_ms / 1000).toFixed(1)}s`,
+    },
+    {
+      label: 'Feasible',
+      ort: result.ortools.feasible ? '✓' : '✗',
+      pyvrp: result.pyvrp.feasible ? '✓' : '✗',
+    },
+  ];
+
+  const verdict =
+    Math.abs(result.gap_pct) < 0.5
+      ? 'Identical route quality — TakumiRoute matches the specialised solver.'
+      : result.gap_pct > 0
+        ? `OR-Tools route is ${result.gap_pct.toFixed(1)}% shorter than PyVRP on this instance.`
+        : `PyVRP route is ${Math.abs(result.gap_pct).toFixed(1)}% shorter — OR-Tools is within ${Math.abs(result.gap_pct).toFixed(1)}% of the benchmark.`;
+
+  return (
+    <div className="space-y-4">
+      <div className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 text-sm inline-block">
+        {verdict}
+      </div>
+      <div className="bg-surface-light rounded-xl border border-surface-lighter overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-surface-lighter">
+              <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">Metric</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary">
+                OR-Tools <span className="text-text-secondary/60">(flexible objective)</span>
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-text-secondary">
+                PyVRP <span className="text-text-secondary/60">(quality yardstick)</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label} className="border-b border-surface-lighter/50">
+                <td className="px-4 py-2.5 text-text-secondary">{r.label}</td>
+                <td className="px-4 py-2.5 text-right text-text-primary font-medium">{r.ort}</td>
+                <td className="px-4 py-2.5 text-right text-text-primary font-medium">{r.pyvrp}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-text-secondary">
+        Both solvers route the same instance with every stop required. OR-Tools also runs
+        TakumiRoute's prize-collecting objective (slot selection); PyVRP solves the base VRPTW only.
+      </p>
+    </div>
+  );
+}
+
 export function SimulationPage() {
-  const [mode, setMode] = useState<'single' | 'monte-carlo'>('single');
+  const [mode, setMode] = useState<'single' | 'monte-carlo' | 'benchmark'>('single');
   const [nStops, setNStops] = useState(30);
   const [nVehicles, setNVehicles] = useState(3);
   const [slotCode, setSlotCode] = useState('am');
@@ -168,6 +245,7 @@ export function SimulationPage() {
 
   const simMutation = useRunSimulation();
   const mcMutation = useRunMonteCarlo();
+  const bmMutation = useRunBenchmark();
   const { setLastSimulation, setLastMonteCarlo, lastSimulation, lastMonteCarlo } = useAppStore();
 
   const handleRun = () => {
@@ -176,16 +254,18 @@ export function SimulationPage() {
         { n_stops: nStops, n_vehicles: nVehicles, slot_code: slotCode, day_of_week: dayOfWeek },
         { onSuccess: (data) => setLastSimulation(data) },
       );
-    } else {
+    } else if (mode === 'monte-carlo') {
       mcMutation.mutate(
         { n_runs: nRuns, n_stops: nStops, n_vehicles: nVehicles, slot_code: slotCode, base_seed: 42 },
         { onSuccess: (data) => setLastMonteCarlo(data) },
       );
+    } else {
+      bmMutation.mutate({ n_stops: nStops, n_vehicles: nVehicles, time_limit_seconds: 5 });
     }
   };
 
-  const isLoading = simMutation.isPending || mcMutation.isPending;
-  const error = simMutation.error || mcMutation.error;
+  const isLoading = simMutation.isPending || mcMutation.isPending || bmMutation.isPending;
+  const error = simMutation.error || mcMutation.error || bmMutation.error;
 
   return (
     <div className="space-y-6">
@@ -198,7 +278,7 @@ export function SimulationPage() {
       <div className="bg-surface-light rounded-xl border border-surface-lighter p-6">
         {/* Mode Toggle */}
         <div className="flex gap-2 mb-6">
-          {(['single', 'monte-carlo'] as const).map((m) => (
+          {(['single', 'monte-carlo', 'benchmark'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -208,7 +288,7 @@ export function SimulationPage() {
                   : 'bg-surface text-text-secondary hover:text-text-primary hover:bg-surface-lighter'
               }`}
             >
-              {m === 'single' ? 'Single Run' : 'Monte Carlo'}
+              {m === 'single' ? 'Single Run' : m === 'monte-carlo' ? 'Monte Carlo' : 'Solver Benchmark'}
             </button>
           ))}
         </div>
@@ -230,21 +310,23 @@ export function SimulationPage() {
               className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-lighter text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1" title="Window the baseline carrier delivers in for every stop. Takumi auto-selects each recipient's best-predicted slot.">
-              Baseline window
-            </label>
-            <select
-              value={slotCode}
-              onChange={(e) => setSlotCode(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-lighter text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              {SLOT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          {mode === 'single' ? (
+          {mode !== 'benchmark' && (
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1" title="Window the baseline carrier delivers in for every stop. Takumi auto-selects each recipient's best-predicted slot.">
+                Baseline window
+              </label>
+              <select
+                value={slotCode}
+                onChange={(e) => setSlotCode(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-lighter text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                {SLOT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {mode === 'single' && (
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Day</label>
               <select
@@ -257,7 +339,8 @@ export function SimulationPage() {
                 ))}
               </select>
             </div>
-          ) : (
+          )}
+          {mode === 'monte-carlo' && (
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Runs</label>
               <input
@@ -265,6 +348,11 @@ export function SimulationPage() {
                 onChange={(e) => setNRuns(Number(e.target.value))}
                 className="w-full px-3 py-2 rounded-lg bg-surface border border-surface-lighter text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
+            </div>
+          )}
+          {mode === 'benchmark' && (
+            <div className="flex items-end">
+              <p className="text-xs text-text-secondary">OR-Tools vs PyVRP · 5s budget each</p>
             </div>
           )}
         </div>
@@ -280,7 +368,9 @@ export function SimulationPage() {
               Running simulation…
             </span>
           ) : (
-            mode === 'single' ? 'Run Simulation' : `Run ${nRuns} Simulations`
+            mode === 'single' ? 'Run Simulation'
+              : mode === 'monte-carlo' ? `Run ${nRuns} Simulations`
+                : 'Run Benchmark'
           )}
         </button>
 
@@ -294,6 +384,7 @@ export function SimulationPage() {
       {/* Results */}
       {mode === 'single' && lastSimulation && <SimResultView result={lastSimulation} />}
       {mode === 'monte-carlo' && lastMonteCarlo && <MCResultView result={lastMonteCarlo} />}
+      {mode === 'benchmark' && bmMutation.data && <BenchmarkView result={bmMutation.data} />}
     </div>
   );
 }

@@ -238,6 +238,35 @@ export function useRunDetailedSimulation() {
   });
 }
 
+// ── Solver Benchmark (OR-Tools vs PyVRP) ─────────────────────────────
+
+export interface SolverBenchmark {
+  solver: string;
+  feasible: boolean;
+  total_route_seconds: number;
+  num_routes: number;
+  stops_visited: number;
+  wall_time_ms: number;
+}
+
+export interface BenchmarkResult {
+  n_stops: number;
+  n_vehicles: number;
+  ortools: SolverBenchmark;
+  pyvrp: SolverBenchmark;
+  gap_pct: number;
+}
+
+export function useRunBenchmark() {
+  return useMutation({
+    mutationFn: (data: { n_stops: number; n_vehicles: number; time_limit_seconds: number }) =>
+      apiFetch<BenchmarkResult>('/optimize/benchmark', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  });
+}
+
 // ── Agent (coordination layer) ───────────────────────────────────────
 
 export interface AgentOrder {
