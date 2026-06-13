@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.user import User
 from app.security.deps import get_current_user
+from app.security.ratelimit import limiter
 from app.services.simulation.engine import run_monte_carlo, run_simulation
 
 router = APIRouter(prefix="/api/simulation", tags=["simulation"])
@@ -109,7 +111,9 @@ class MonteCarloResponse(BaseModel):
 
 
 @router.post("/run", response_model=SimulationResponse)
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def run_single_simulation(
+    request: Request,
     body: SimulationRequest,
     _user: User = Depends(get_current_user),
 ) -> SimulationResponse:
@@ -151,7 +155,9 @@ def _route_detail_to_output(routes: Any) -> list[RouteDetailOutput]:
 
 
 @router.post("/run-detailed", response_model=DetailedSimulationResponse)
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def run_detailed_simulation(
+    request: Request,
     body: SimulationRequest,
     _user: User = Depends(get_current_user),
 ) -> DetailedSimulationResponse:
@@ -184,7 +190,9 @@ async def run_detailed_simulation(
 
 
 @router.post("/monte-carlo", response_model=MonteCarloResponse)
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def run_monte_carlo_endpoint(
+    request: Request,
     body: MonteCarloRequest,
     _user: User = Depends(get_current_user),
 ) -> MonteCarloResponse:

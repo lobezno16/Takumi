@@ -13,7 +13,9 @@ control whether the optimizer visits a stop in a given time window.
 from __future__ import annotations
 
 import logging
-import pickle
+
+# pickle only (de)serialises our own internally-trained model file.
+import pickle  # nosec B403
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +125,9 @@ def load_model(path: Path | None = None) -> CalibratedClassifierCV:
     """Load a calibrated model from disk."""
     load_path = path or _MODEL_PATH
     with open(load_path, "rb") as f:
-        model = pickle.load(f)  # noqa: S301 — trusted internal model file
+        # Model file is produced by our own training step at a fixed path,
+        # never untrusted external input.
+        model = pickle.load(f)  # noqa: S301  # nosec B301
     logger.info("Model loaded from %s", load_path)
     return model
 

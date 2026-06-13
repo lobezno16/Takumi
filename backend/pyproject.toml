@@ -99,3 +99,8 @@ asyncio_mode = "auto"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.bandit]
+# B311: the only `random` usage is reproducible, explicitly-seeded synthetic
+# data + simulation generation — never for security/cryptographic purposes.
+skips = ["B311"]

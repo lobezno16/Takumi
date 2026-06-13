@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import random
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.user import User
 from app.security.deps import get_current_user
+from app.security.ratelimit import limiter
 from app.services.optimizer.benchmark import run_benchmark
 from app.services.optimizer.solver import (
     OptStop,
@@ -78,7 +80,9 @@ class OptimizeResponse(BaseModel):
 
 
 @router.post("", response_model=OptimizeResponse)
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def optimize_routes(
+    request: Request,
     body: OptimizeRequest,
     _user: User = Depends(get_current_user),
 ) -> OptimizeResponse:
@@ -179,7 +183,9 @@ class BenchmarkResponse(BaseModel):
 
 
 @router.post("/benchmark", response_model=BenchmarkResponse)
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def benchmark_solvers(
+    request: Request,
     body: BenchmarkRequest,
     _user: User = Depends(get_current_user),
 ) -> BenchmarkResponse:

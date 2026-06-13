@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,9 +20,11 @@ router = APIRouter(prefix="/api/stops", tags=["stops"])
 async def list_stops(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ) -> list[Stop]:
-    """List all stops."""
-    result = await db.execute(select(Stop))
+    """List stops with bounded pagination (§13.4)."""
+    result = await db.execute(select(Stop).limit(limit).offset(offset))
     return list(result.scalars().all())
 
 

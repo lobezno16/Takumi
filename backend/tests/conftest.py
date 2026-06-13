@@ -1,12 +1,18 @@
 """Shared test fixtures for TakumiRoute backend tests."""
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+import os
 
-import pytest
-from httpx import ASGITransport, AsyncClient
+# Force the test environment before any app import so settings (and the
+# rate limiter, which is disabled under "test") initialise correctly.
+os.environ["ENVIRONMENT"] = "test"
 
-from app.main import app
+from collections.abc import AsyncGenerator  # noqa: E402
+
+import pytest  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture(scope="session")

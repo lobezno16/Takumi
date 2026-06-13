@@ -11,9 +11,12 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
+# Security rationale (§13.9): SQL echo dumps bound parameters — emails,
+# addresses, password hashes — into logs, so it stays off in every
+# environment. Use a database-side slow-query log for diagnostics instead.
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=(settings.ENVIRONMENT == "development"),
+    echo=False,
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,

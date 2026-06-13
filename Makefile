@@ -73,6 +73,8 @@ format: ## Auto-format all code
 security: ## Run all security scans
 	docker compose exec backend pip-audit
 	docker compose exec backend python -m bandit -r app/ -c pyproject.toml
+	docker compose exec backend semgrep --error --config p/python --config p/owasp-top-ten app/
+	docker compose exec frontend npx eslint . --max-warnings 0
 	docker compose exec frontend npm audit --omit=dev
 	@echo "Run 'pre-commit run gitleaks --all-files' separately for secret scanning"
 

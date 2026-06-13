@@ -4,8 +4,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.api.agent import router as agent_router
 from app.api.auth import router as auth_router
@@ -19,12 +22,19 @@ from app.api.stops import router as stops_router
 from app.api.vehicles import router as vehicles_router
 from app.api.ws import router as ws_router
 from app.config import settings
+from app.observability import configure_logging, get_logger, init_sentry
+from app.security.ratelimit import limiter
 from app.services.cache import close_redis
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: initialize and tear down shared resources."""
+    configure_logging()
+    init_sentry()
+    logger.info("startup", environment=settings.ENVIRONMENT)
     yield
     await close_redis()
 
@@ -36,6 +46,11 @@ app = FastAPI(
     docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
 )
+
+# Rate limiting (slowapi) — limiter lives on app.state; per-route limits are
+# applied via @limiter.limit on auth and expensive endpoints (§13.8).
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Security rationale: CORS locked to known frontend origin with explicit
 # methods and headers — never use wildcards in production.
@@ -68,6 +83,41 @@ async def security_headers_middleware(
     if "server" in response.headers:
         del response.headers["server"]
     return response
+
+
+@app.middleware("http")
+async def body_size_limit_middleware(
+    request: Request,
+    call_next: Any,
+) -> Response:
+    """Reject oversized request bodies before they are read (§13.4)."""
+    content_length = request.headers.get("content-length")
+    if content_length is not None and content_length.isdigit():
+        if int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
+            return JSONResponse(
+                status_code=413,  # Content Too Large
+                content={"detail": "Request body too large"},
+            )
+    return await call_next(request)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """Return a generic error to clients; log full detail server-side (§13.15)."""
+    logger.error(
+        "unhandled_exception",
+        path=request.url.path,
+        method=request.method,
+        error_type=type(exc).__name__,
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error"},
+    )
 
 
 @app.get("/health")

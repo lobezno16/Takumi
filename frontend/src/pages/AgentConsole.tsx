@@ -20,9 +20,10 @@ const PRESETS: { label: string; text: string; injection?: boolean }[] = [
   },
 ];
 
-const SLOT_LABEL: Record<string, string> = {
-  am: 'Morning', t1214: '12–14', t1416: '14–16', t1618: '16–18', t1821: 'Evening',
-};
+const SLOT_LABEL = new Map<string, string>([
+  ['am', 'Morning'], ['t1214', '12–14'], ['t1416', '14–16'],
+  ['t1618', '16–18'], ['t1821', 'Evening'],
+]);
 
 function OrderRow({
   order, active, onClick,
@@ -38,11 +39,11 @@ function OrderRow({
         <span className="text-sm text-text-primary truncate">{order.address}</span>
         {order.assigned_slot ? (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/15 text-success font-medium">
-            ✓ {SLOT_LABEL[order.assigned_slot] ?? order.assigned_slot}
+            ✓ {SLOT_LABEL.get(order.assigned_slot) ?? order.assigned_slot}
           </span>
         ) : (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-text-secondary">
-            best: {SLOT_LABEL[order.best_slot] ?? order.best_slot}
+            best: {SLOT_LABEL.get(order.best_slot) ?? order.best_slot}
           </span>
         )}
       </div>
@@ -62,7 +63,7 @@ export function AgentConsole() {
   const [session, setSession] = useState<AgentSession | null>(null);
   const [orders, setOrders] = useState<AgentOrder[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [threads, setThreads] = useState<Record<string, Bubble[]>>({});
+  const [threads, setThreads] = useState<Map<string, Bubble[]>>(new Map());
   const [input, setInput] = useState('');
   const [feed, setFeed] = useState<string[]>([]);
 
@@ -85,7 +86,7 @@ export function AgentConsole() {
           setSession(s);
           setOrders(s.orders);
           setActiveId(s.orders[0]?.order_id ?? null);
-          setThreads({});
+          setThreads(new Map());
           setFeed([]);
         },
       },
@@ -96,16 +97,13 @@ export function AgentConsole() {
     (text: string) => {
       if (!activeId || !text.trim()) return;
       const orderId = activeId;
-      setThreads((t) => ({ ...t, [orderId]: [...(t[orderId] ?? []), { from: 'recipient', text }] }));
+      setThreads((t) => new Map(t).set(orderId, [...(t.get(orderId) ?? []), { from: 'recipient', text }]));
       setInput('');
       sendMessage.mutate(
         { order_id: orderId, message: text, day_of_week: session?.day_of_week ?? 2 },
         {
           onSuccess: (res) => {
-            setThreads((t) => ({
-              ...t,
-              [orderId]: [...(t[orderId] ?? []), { from: 'agent', text: res.reply }],
-            }));
+            setThreads((t) => new Map(t).set(orderId, [...(t.get(orderId) ?? []), { from: 'agent', text: res.reply }]));
             if (res.confirmed_slot) {
               setOrders((os) =>
                 os.map((o) => (o.order_id === orderId ? { ...o, assigned_slot: res.confirmed_slot } : o)),
@@ -123,7 +121,7 @@ export function AgentConsole() {
     replan.mutate({ session_id: session.session_id, reason_code: 'window_changed' });
   }, [replan, session]);
 
-  const activeThread = activeId ? threads[activeId] ?? [] : [];
+  const activeThread = activeId ? threads.get(activeId) ?? [] : [];
 
   return (
     <div className="space-y-6">

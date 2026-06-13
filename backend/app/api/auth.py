@@ -1,17 +1,26 @@
-"""Auth API router — registration, login, and current user."""
+"""Auth API router — registration, login, token refresh, and current user."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas import UserCreate, UserResponse
-from app.security.auth import create_access_token, hash_password, verify_password
+from app.security.auth import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    verify_password,
+)
 from app.security.deps import get_current_user
+from app.security.ratelimit import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -19,6 +28,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class TokenResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
 
 
@@ -28,8 +38,15 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class RefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    refresh_token: str = Field(min_length=1, max_length=4096)
+
+
 @router.post("/register", response_model=UserResponse, status_code=201)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
 async def register(
+    request: Request,
     body: UserCreate,
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -53,11 +70,13 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
 async def login(
+    request: Request,
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    """Authenticate with email/password and receive a JWT access token."""
+    """Authenticate with email/password and receive access + refresh tokens."""
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
 
@@ -67,8 +86,28 @@ async def login(
             detail="Invalid email or password",
         )
 
-    token = create_access_token(data={"sub": str(user.id)})
-    return TokenResponse(access_token=token)
+    sub = {"sub": str(user.id)}
+    return TokenResponse(
+        access_token=create_access_token(data=sub),
+        refresh_token=create_refresh_token(data=sub),
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
+async def refresh(
+    request: Request,
+    body: RefreshRequest,
+) -> TokenResponse:
+    """Exchange a valid refresh token for a new short-lived access token."""
+    try:
+        payload = decode_refresh_token(body.refresh_token)
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        ) from exc
+    return TokenResponse(access_token=create_access_token(data={"sub": payload["sub"]}))
 
 
 @router.get("/me", response_model=UserResponse)

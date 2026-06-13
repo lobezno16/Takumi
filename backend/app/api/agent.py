@@ -9,11 +9,12 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_db
 from app.models.agent_interaction import AgentInteraction
 from app.models.enums import AddressType, OrderStatus, ParcelSize
@@ -23,6 +24,7 @@ from app.models.user import User
 from app.security.deps import get_current_user
 from app.services.agent import tools
 from app.services.agent.guards import AgentGuardError
+from app.security.ratelimit import limiter
 from app.services.agent.loop import handle_message
 from app.services.cache import get_redis
 from app.synthetic.generator import generate_stops
@@ -88,7 +90,9 @@ class InteractionItem(BaseModel):
 
 
 @router.post("/session", response_model=SessionResponse, status_code=201)
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def create_session(
+    request: Request,
     body: SessionRequest,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
@@ -150,7 +154,9 @@ async def create_session(
 
 
 @router.post("/message", response_model=MessageResponse)
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def post_message(
+    request: Request,
     body: MessageRequest,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
@@ -177,7 +183,9 @@ async def post_message(
 
 
 @router.post("/replan")
+@limiter.limit(settings.RATE_LIMIT_EXPENSIVE)
 async def post_replan(
+    request: Request,
     body: ReplanRequest,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
