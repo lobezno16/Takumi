@@ -7,13 +7,16 @@ from typing import Any
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.matrix import router as matrix_router
 from app.config import settings
+from app.services.cache import close_redis
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: initialize and tear down shared resources."""
     yield
+    await close_redis()
 
 
 app = FastAPI(
@@ -62,3 +65,6 @@ async def security_headers_middleware(
 async def health_check() -> dict[str, str]:
     """Liveness probe endpoint."""
     return {"status": "ok", "service": "takumiroute-backend"}
+
+
+app.include_router(matrix_router)
