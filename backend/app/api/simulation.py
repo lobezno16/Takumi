@@ -17,7 +17,8 @@ class SimulationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     n_stops: int = Field(default=50, ge=5, le=200)
     n_vehicles: int = Field(default=3, ge=1, le=20)
-    slot_code: str = Field(default="t1821", pattern="^(am|t1214|t1416|t1618|t1821)$")
+    # Baseline's fixed default window; Takumi auto-selects the best slot per stop.
+    slot_code: str = Field(default="am", pattern="^(am|t1214|t1416|t1618|t1821)$")
     day_of_week: int = Field(default=2, ge=0, le=6)
     seed: int | None = None
 
@@ -50,12 +51,49 @@ class SimulationResponse(BaseModel):
     solver_time_ms: int
 
 
+class RouteStopDetailOutput(BaseModel):
+    stop_id: str
+    latitude: float
+    longitude: float
+    sequence: int
+    arrival_min: int
+    assigned_slot: str
+    predicted_prob: float
+    outcome: str
+
+
+class RouteDetailOutput(BaseModel):
+    vehicle_id: str
+    vehicle_index: int
+    stops: list[RouteStopDetailOutput]
+    duration_min: int
+    load: int
+
+
+class DetailedSimulationResponse(BaseModel):
+    run_id: str
+    ward: str
+    seed: int
+    n_stops: int
+    n_vehicles: int
+    slot_code: str
+    day_of_week: int
+    depot_lat: float
+    depot_lon: float
+    baseline: KPIsOutput
+    takumi: KPIsOutput
+    improvement_pct: float
+    solver_time_ms: int
+    baseline_routes: list[RouteDetailOutput]
+    takumi_routes: list[RouteDetailOutput]
+
+
 class MonteCarloRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     n_runs: int = Field(default=5, ge=1, le=50)
     n_stops: int = Field(default=30, ge=5, le=100)
     n_vehicles: int = Field(default=3, ge=1, le=10)
-    slot_code: str = Field(default="t1821", pattern="^(am|t1214|t1416|t1618|t1821)$")
+    slot_code: str = Field(default="am", pattern="^(am|t1214|t1416|t1618|t1821)$")
     base_seed: int = Field(default=42)
 
 
@@ -95,6 +133,53 @@ async def run_single_simulation(
         takumi=KPIsOutput(**result.takumi.__dict__),
         improvement_pct=result.improvement_pct,
         solver_time_ms=result.solver_time_ms,
+    )
+
+
+def _route_detail_to_output(routes: Any) -> list[RouteDetailOutput]:
+    """Map engine RouteDetail dataclasses to API output schemas."""
+    return [
+        RouteDetailOutput(
+            vehicle_id=r.vehicle_id,
+            vehicle_index=r.vehicle_index,
+            stops=[RouteStopDetailOutput(**s.__dict__) for s in r.stops],
+            duration_min=r.duration_min,
+            load=r.load,
+        )
+        for r in routes
+    ]
+
+
+@router.post("/run-detailed", response_model=DetailedSimulationResponse)
+async def run_detailed_simulation(
+    body: SimulationRequest,
+    _user: User = Depends(get_current_user),
+) -> DetailedSimulationResponse:
+    """Run a simulation and return full route geometry for the live map."""
+    result = await run_simulation(
+        n_stops=body.n_stops,
+        n_vehicles=body.n_vehicles,
+        slot_code=body.slot_code,
+        day_of_week=body.day_of_week,
+        seed=body.seed,
+        detailed=True,
+    )
+    return DetailedSimulationResponse(
+        run_id=result.run_id,
+        ward=result.ward,
+        seed=result.seed,
+        n_stops=result.n_stops,
+        n_vehicles=result.n_vehicles,
+        slot_code=result.slot_code,
+        day_of_week=result.day_of_week,
+        depot_lat=result.depot_lat,
+        depot_lon=result.depot_lon,
+        baseline=KPIsOutput(**result.baseline.__dict__),
+        takumi=KPIsOutput(**result.takumi.__dict__),
+        improvement_pct=result.improvement_pct,
+        solver_time_ms=result.solver_time_ms,
+        baseline_routes=_route_detail_to_output(result.baseline_routes),
+        takumi_routes=_route_detail_to_output(result.takumi_routes),
     )
 
 

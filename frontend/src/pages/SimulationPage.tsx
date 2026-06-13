@@ -162,7 +162,7 @@ export function SimulationPage() {
   const [mode, setMode] = useState<'single' | 'monte-carlo'>('single');
   const [nStops, setNStops] = useState(30);
   const [nVehicles, setNVehicles] = useState(3);
-  const [slotCode, setSlotCode] = useState('t1821');
+  const [slotCode, setSlotCode] = useState('am');
   const [dayOfWeek, setDayOfWeek] = useState(2);
   const [nRuns, setNRuns] = useState(5);
 
@@ -231,7 +231,9 @@ export function SimulationPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">Time Slot</label>
+            <label className="block text-xs font-medium text-text-secondary mb-1" title="Window the baseline carrier delivers in for every stop. Takumi auto-selects each recipient's best-predicted slot.">
+              Baseline window
+            </label>
             <select
               value={slotCode}
               onChange={(e) => setSlotCode(e.target.value)}

@@ -16,6 +16,7 @@ from app.api.predictions import router as predictions_router
 from app.api.simulation import router as simulation_router
 from app.api.stops import router as stops_router
 from app.api.vehicles import router as vehicles_router
+from app.api.ws import router as ws_router
 from app.config import settings
 from app.services.cache import close_redis
 
@@ -84,3 +85,4 @@ app.include_router(predictions_router)
 app.include_router(simulation_router)
 app.include_router(stops_router)
 app.include_router(vehicles_router)
+app.include_router(ws_router)

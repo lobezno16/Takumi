@@ -35,6 +35,10 @@ from app.synthetic.generator import (
 
 logger = logging.getLogger(__name__)
 
+# Weeks of synthetic attempt history used to estimate per-slot home
+# probabilities. Deeper history ⇒ a less noisy signal for slot selection.
+_HISTORY_WEEKS = 16
+
 
 @dataclass
 class SimulationKPIs:
@@ -53,6 +57,29 @@ class SimulationKPIs:
 
 
 @dataclass
+class RouteStopDetail:
+    """Geometry + outcome for a single visited stop, for map rendering."""
+    stop_id: str
+    latitude: float
+    longitude: float
+    sequence: int
+    arrival_min: int
+    assigned_slot: str
+    predicted_prob: float
+    outcome: str  # "success" | "miss"
+
+
+@dataclass
+class RouteDetail:
+    """A single vehicle's route with full geometry for the frontend map."""
+    vehicle_id: str
+    vehicle_index: int
+    stops: list[RouteStopDetail] = field(default_factory=list)
+    duration_min: int = 0
+    load: int = 0
+
+
+@dataclass
 class SimulationResult:
     """Result of a single simulation run."""
     run_id: str
@@ -66,6 +93,11 @@ class SimulationResult:
     takumi: SimulationKPIs
     improvement_pct: float = 0.0  # % reduction in redelivery rate
     solver_time_ms: int = 0
+    # Geometry — populated only when run_simulation(detailed=True).
+    depot_lat: float = 0.0
+    depot_lon: float = 0.0
+    baseline_routes: list[RouteDetail] = field(default_factory=list)
+    takumi_routes: list[RouteDetail] = field(default_factory=list)
 
 
 def _simulate_deliveries(
@@ -73,12 +105,16 @@ def _simulate_deliveries(
     stops: list[OptStop],
     ground_truth_probs: dict[str, float],
     rng: random.Random,
+    outcomes: dict[str, str] | None = None,
 ) -> SimulationKPIs:
     """Simulate delivery outcomes for a set of routes.
 
     For each stop in the routes, flips a coin based on the ground-truth
     probability to determine if the delivery succeeds (recipient home)
     or fails (needs redelivery).
+
+    If ``outcomes`` is provided, it is populated with a
+    ``{stop_id: "success" | "miss"}`` mapping for geometry rendering.
     """
     kpis = SimulationKPIs(total_stops=len(stops))
 
@@ -96,8 +132,12 @@ def _simulate_deliveries(
             prob = ground_truth_probs.get(route_stop.stop_id, 0.5)
             if rng.random() < prob:
                 kpis.deliveries_successful += 1
+                if outcomes is not None:
+                    outcomes[route_stop.stop_id] = "success"
             else:
                 kpis.deliveries_failed += 1
+                if outcomes is not None:
+                    outcomes[route_stop.stop_id] = "miss"
 
     kpis.stops_attempted = len(visited_ids)
     kpis.stops_skipped = kpis.total_stops - kpis.stops_attempted
@@ -125,6 +165,41 @@ def _simulate_deliveries(
     )
 
     return kpis
+
+
+def _build_route_detail(
+    route_result: OptResult,
+    stops_by_id: dict[str, OptStop],
+    slot_by_stop: dict[str, str],
+    predicted_probs: dict[str, float],
+    outcomes: dict[str, str],
+) -> list[RouteDetail]:
+    """Assemble per-stop geometry for the frontend map from a solved result."""
+    details: list[RouteDetail] = []
+    for route in route_result.routes:
+        if not route.stops:
+            continue
+        route_stops: list[RouteStopDetail] = []
+        for sequence, route_stop in enumerate(route.stops):
+            stop = stops_by_id[route_stop.stop_id]
+            route_stops.append(RouteStopDetail(
+                stop_id=route_stop.stop_id,
+                latitude=stop.latitude,
+                longitude=stop.longitude,
+                sequence=sequence,
+                arrival_min=route_stop.arrival_seconds // 60,
+                assigned_slot=slot_by_stop.get(route_stop.stop_id, ""),
+                predicted_prob=round(predicted_probs.get(route_stop.stop_id, 0.5), 4),
+                outcome=outcomes.get(route_stop.stop_id, "success"),
+            ))
+        details.append(RouteDetail(
+            vehicle_id=route.vehicle_id,
+            vehicle_index=route.vehicle_index,
+            stops=route_stops,
+            duration_min=route.total_duration_seconds // 60,
+            load=route.load,
+        ))
+    return details
 
 
 def _build_baseline_routes(
@@ -166,12 +241,13 @@ def _build_baseline_routes(
 async def run_simulation(
     n_stops: int = 50,
     n_vehicles: int = 3,
-    slot_code: str = "t1821",
+    slot_code: str = "am",  # baseline's fixed default window
     day_of_week: int = 2,  # Wednesday
     seed: int | None = None,
     ward: str = "koto",
     depot_lat: float = 35.672,
     depot_lon: float = 139.817,
+    detailed: bool = False,
 ) -> SimulationResult:
     """Run a single simulation comparing baseline vs Takumi routing.
 
@@ -201,40 +277,70 @@ async def run_simulation(
     # 1. Generate synthetic stops
     synth_stops = generate_stops(n_stops=n_stops, seed=seed)
 
-    # 2. Generate history for feature engineering
-    history = generate_availability_history(synth_stops, n_weeks=8, seed=seed)
+    # 2. Generate history for feature engineering. Deeper history yields a
+    #    better-calibrated per-slot signal — the ML value proposition: more
+    #    observed attempts ⇒ Takumi reliably identifies each stop's best slot.
+    history = generate_availability_history(synth_stops, n_weeks=_HISTORY_WEEKS, seed=seed)
 
-    # 3. Compute ground-truth home probabilities and ML penalties
+    # 3. Per-stop ground-truth schedule + ML-predicted best slot.
+    #
+    # Each recipient has a fixed "personality" bias applied across every slot,
+    # so their genuine availability varies by window. The two policies differ
+    # only in which window they attempt:
+    #   - Baseline: the carrier's fixed default window (`slot_code`) for all
+    #     stops — no availability awareness (§9 baseline definition).
+    #   - Takumi: pre-pick each stop's argmax-predicted slot (§6.2 fallback) —
+    #     this is the first-attempt thesis. Because the ML proxy correlates
+    #     with (but is noisier than) ground truth, Takumi usually lands a
+    #     genuinely better window, raising first-attempt success.
     is_weekday = day_of_week < 5
-    ground_truth_probs: dict[str, float] = {}
+
+    def ground_truth(address_type: str, slot: str, personality: float) -> float:
+        base_p = _BASE_PROBS.get((address_type, slot, is_weekday), 0.5)
+        return max(0.05, min(0.95, base_p + personality))
+
+    baseline_gt: dict[str, float] = {}
+    takumi_gt: dict[str, float] = {}
+    baseline_slot: dict[str, str] = {}
+    takumi_slot: dict[str, str] = {}
+    baseline_pred: dict[str, float] = {}
+    takumi_pred: dict[str, float] = {}
     opt_stops: list[OptStop] = []
 
     for i, stop in enumerate(synth_stops):
-        # Ground truth from base probability table + noise
-        base_p = _BASE_PROBS.get(
-            (stop["address_type"], slot_code, is_weekday),
-            0.5,
-        )
-        # Add per-stop noise for realism
-        gt_prob = max(0.05, min(0.95, base_p + rng.gauss(0, 0.08)))
-        ground_truth_probs[stop["id"]] = gt_prob
+        sid = stop["id"]
+        addr = stop["address_type"]
+        personality = rng.gauss(0, 0.08)
 
-        # ML-derived penalty (uses feature engineering)
-        features = generate_feature_row(stop, slot_code, day_of_week, history)
-        # Use the historical hit rate as a proxy for predicted probability
-        predicted_prob = features["historical_hit_rate"]
-        penalty = probability_to_penalty(predicted_prob)
+        # ML-predicted home probability per slot (historical-hit-rate proxy).
+        slot_predictions = {
+            s: generate_feature_row(stop, s, day_of_week, history)[
+                "historical_hit_rate"
+            ]
+            for s in _SLOT_CODES
+        }
+        best_slot = max(slot_predictions, key=lambda s: slot_predictions[s])
+
+        # Baseline: carrier's fixed default window for everyone.
+        baseline_slot[sid] = slot_code
+        baseline_pred[sid] = slot_predictions[slot_code]
+        baseline_gt[sid] = ground_truth(addr, slot_code, personality)
+
+        # Takumi: deliver in the recipient's best-predicted window.
+        takumi_slot[sid] = best_slot
+        takumi_pred[sid] = slot_predictions[best_slot]
+        takumi_gt[sid] = ground_truth(addr, best_slot, personality)
 
         opt_stops.append(OptStop(
             index=i,
-            stop_id=stop["id"],
+            stop_id=sid,
             latitude=stop["latitude"],
             longitude=stop["longitude"],
             demand=1,
             parcel_size=rng.choice(["60", "80", "100", "120"]),
             floor=stop.get("floor"),
-            address_type=stop["address_type"],
-            penalty=penalty,
+            address_type=addr,
+            penalty=probability_to_penalty(slot_predictions[best_slot]),
             time_window_start=0,
             time_window_end=28800,
         ))
@@ -264,11 +370,15 @@ async def run_simulation(
     baseline_rng = random.Random(seed + 1000)
     takumi_rng = random.Random(seed + 1000)  # Same seed = same coin flips
 
+    baseline_outcomes: dict[str, str] = {}
+    takumi_outcomes: dict[str, str] = {}
     baseline_kpis = _simulate_deliveries(
-        baseline_result, opt_stops, ground_truth_probs, baseline_rng,
+        baseline_result, opt_stops, baseline_gt, baseline_rng,
+        outcomes=baseline_outcomes,
     )
     takumi_kpis = _simulate_deliveries(
-        takumi_result, opt_stops, ground_truth_probs, takumi_rng,
+        takumi_result, opt_stops, takumi_gt, takumi_rng,
+        outcomes=takumi_outcomes,
     )
 
     # 7. Compute improvement
@@ -296,7 +406,20 @@ async def run_simulation(
             baseline_result.solver_wall_time_ms
             + takumi_result.solver_wall_time_ms
         ),
+        depot_lat=depot_lat,
+        depot_lon=depot_lon,
     )
+
+    if detailed:
+        stops_by_id = {s.stop_id: s for s in opt_stops}
+        result.baseline_routes = _build_route_detail(
+            baseline_result, stops_by_id, baseline_slot,
+            baseline_pred, baseline_outcomes,
+        )
+        result.takumi_routes = _build_route_detail(
+            takumi_result, stops_by_id, takumi_slot,
+            takumi_pred, takumi_outcomes,
+        )
 
     logger.info(
         "Simulation %s complete: baseline_redeliver=%.1f%% takumi_redeliver=%.1f%% improvement=%.1f%%",
@@ -313,7 +436,7 @@ async def run_monte_carlo(
     n_runs: int = 10,
     n_stops: int = 50,
     n_vehicles: int = 3,
-    slot_code: str = "t1821",
+    slot_code: str = "am",
     base_seed: int = 42,
 ) -> dict[str, Any]:
     """Run multiple simulations and aggregate results.

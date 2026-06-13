@@ -147,3 +147,40 @@ async def test_simulation_deterministic() -> None:
     assert r1.baseline.deliveries_successful == r2.baseline.deliveries_successful
     assert r1.takumi.deliveries_successful == r2.takumi.deliveries_successful
     assert r1.improvement_pct == r2.improvement_pct
+
+
+async def test_takumi_beats_naive_baseline_via_slot_selection() -> None:
+    """Against a naive AM-only baseline, Takumi must cut redelivery by
+    choosing each recipient's best-predicted window (the project thesis)."""
+    result = await run_simulation(
+        n_stops=30, n_vehicles=3, slot_code="am", day_of_week=2, seed=5,
+        detailed=True,
+    )
+
+    # First-attempt thesis: fewer redeliveries than the fixed-window baseline.
+    assert result.takumi.redelivery_rate < result.baseline.redelivery_rate
+    assert result.improvement_pct > 0
+
+    # Slot selection actually varied — Takumi did not just copy the AM default.
+    chosen = {
+        stop.assigned_slot
+        for route in result.takumi_routes
+        for stop in route.stops
+    }
+    assert chosen - {"am"}, "Takumi should pick non-AM windows for some stops"
+
+
+async def test_detailed_routes_have_geometry() -> None:
+    """Detailed runs expose real per-stop coordinates and outcomes for the map."""
+    result = await run_simulation(
+        n_stops=12, n_vehicles=2, slot_code="am", seed=7, detailed=True,
+    )
+
+    assert result.depot_lat != 0.0 and result.depot_lon != 0.0
+    assert result.takumi_routes, "expected at least one Takumi route"
+    for route in result.takumi_routes:
+        for stop in route.stops:
+            assert -90 <= stop.latitude <= 90
+            assert -180 <= stop.longitude <= 180
+            assert stop.outcome in ("success", "miss")
+            assert 0.0 <= stop.predicted_prob <= 1.0

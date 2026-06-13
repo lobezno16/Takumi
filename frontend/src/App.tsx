@@ -3,9 +3,10 @@ import { useAppStore } from '@/store/app';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { SimulationPage } from '@/pages/SimulationPage';
+import { MapPage } from '@/pages/MapPage';
 
 type NavItem = {
-  id: 'dashboard' | 'simulation';
+  id: 'dashboard' | 'simulation' | 'map';
   label: string;
   icon: string;
 };
@@ -13,6 +14,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
   { id: 'simulation', label: 'Simulation', icon: '🧪' },
+  { id: 'map', label: 'Route Map', icon: '🗺️' },
 ];
 
 function Sidebar() {
@@ -88,6 +90,7 @@ function MainContent() {
       <div className="max-w-6xl mx-auto p-8">
         {currentPage === 'dashboard' && <DashboardPage />}
         {currentPage === 'simulation' && <SimulationPage />}
+        {currentPage === 'map' && <MapPage />}
       </div>
     </main>
   );

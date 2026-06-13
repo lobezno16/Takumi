@@ -167,6 +167,45 @@ interface MonteCarloRequest {
   base_seed: number;
 }
 
+// ── Detailed Simulation (route geometry for the map) ─────────────────
+
+export interface RouteStopDetail {
+  stop_id: string;
+  latitude: number;
+  longitude: number;
+  sequence: number;
+  arrival_min: number;
+  assigned_slot: string;
+  predicted_prob: number;
+  outcome: 'success' | 'miss';
+}
+
+export interface RouteDetail {
+  vehicle_id: string;
+  vehicle_index: number;
+  stops: RouteStopDetail[];
+  duration_min: number;
+  load: number;
+}
+
+export interface DetailedSimulationResult {
+  run_id: string;
+  ward: string;
+  seed: number;
+  n_stops: number;
+  n_vehicles: number;
+  slot_code: string;
+  day_of_week: number;
+  depot_lat: number;
+  depot_lon: number;
+  baseline: KPIs;
+  takumi: KPIs;
+  improvement_pct: number;
+  solver_time_ms: number;
+  baseline_routes: RouteDetail[];
+  takumi_routes: RouteDetail[];
+}
+
 // ── Simulation API ───────────────────────────────────────────────────
 
 export function useRunSimulation() {
@@ -183,6 +222,16 @@ export function useRunMonteCarlo() {
   return useMutation({
     mutationFn: (data: MonteCarloRequest) =>
       apiFetch<MonteCarloResult>('/simulation/monte-carlo', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  });
+}
+
+export function useRunDetailedSimulation() {
+  return useMutation({
+    mutationFn: (data: SimulationRequest) =>
+      apiFetch<DetailedSimulationResult>('/simulation/run-detailed', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
