@@ -1,0 +1,100 @@
+[project]
+name = "takumiroute-backend"
+version = "0.1.0"
+description = "TakumiRoute delivery optimization engine backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.136.3",
+    "uvicorn[standard]>=0.34.0,<1.0",
+    "sqlalchemy[asyncio]==2.0.50",
+    "asyncpg>=0.30.0,<1.0",
+    "alembic>=1.15.0,<2.0",
+    "geoalchemy2>=0.17.0,<1.0",
+    "pydantic>=2.11.0,<3.0",
+    "pydantic-settings>=2.9.0,<3.0",
+    "ortools==9.15.6755",
+    "pyvrp==0.13.3",
+    "lightgbm==4.6.0",
+    "scikit-learn>=1.6.0,<2.0",
+    "pandas>=2.2.0,<3.0",
+    "numpy>=2.0.0,<3.0",
+    "redis>=5.0.0,<6.0",
+    "httpx>=0.28.0,<1.0",
+    "structlog>=25.0.0,<26.0",
+    "sentry-sdk[fastapi]>=2.0.0,<3.0",
+    "passlib[argon2]>=1.7.4,<2.0",
+    "argon2-cffi>=23.1.0,<24.0",
+    "PyJWT[crypto]>=2.10.0,<3.0",
+    "slowapi>=0.1.9,<1.0",
+    "websockets>=14.0,<15.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-asyncio>=0.25.0,<1.0",
+    "ruff>=0.11.0,<1.0",
+    "black>=25.0,<26.0",
+    "mypy>=1.15.0,<2.0",
+    "bandit>=1.9.0,<2.0",
+    "pip-audit>=2.9.0,<3.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "S",
+    "B",
+    "A",
+    "C4",
+    "DTZ",
+    "T20",
+    "ICN",
+    "PIE",
+    "PT",
+    "RSE",
+    "RET",
+    "SLF",
+    "SIM",
+    "TCH",
+    "ARG",
+    "ERA",
+    "PL",
+    "RUF",
+]
+ignore = ["S101", "PLR0913"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.black]
+target-version = ["py312"]
+line-length = 88
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

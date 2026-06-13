@@ -1,0 +1,40 @@
+.env
+.env.*
+.git/
+.github/
+.gitignore
+.pre-commit-config.yaml
+*.md
+LICENSE
+
+# Python
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Data
+data/osm/*.osm
+data/osm/*.osm.pbf
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tests (not needed in prod images)
+backend/tests/
+frontend/tests/
+frontend/e2e/

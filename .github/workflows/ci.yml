@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-backend:
+    name: Lint Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install ".[dev]"
+      - name: Ruff check
+        run: ruff check app/ tests/
+      - name: Ruff format check
+        run: ruff format --check app/ tests/
+      - name: Mypy
+        run: mypy app/
+      - name: Bandit
+        run: bandit -r app/ -c pyproject.toml
+
+  lint-frontend:
+    name: Lint Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    needs: lint-backend
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: takumi
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: takumiroute_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U takumi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+asyncpg://takumi:test_password@localhost:5432/takumiroute_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: test-secret-do-not-use-in-production
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install ".[dev]"
+      - name: Run tests
+        run: pytest -v --tb=short
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+
+  security:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Python deps
+        run: pip install pip-audit
+      - name: pip-audit
+        run: cd backend && pip-audit
+      - name: npm audit
+        run: cd frontend && npm ci && npm audit --omit=dev
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

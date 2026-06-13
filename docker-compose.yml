@@ -1,0 +1,104 @@
+# ============================================================
+# TakumiRoute — Docker Compose
+# One-command boot: docker compose up
+# OSRM requires: docker compose --profile routing up (after Phase 2)
+# ============================================================
+
+services:
+  # --- PostgreSQL + PostGIS ---
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-takumi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-takumi_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-takumiroute}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-takumi} -d ${POSTGRES_DB:-takumiroute}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- Redis ---
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- OSRM (routing engine) ---
+  # Behind the "routing" profile: won't start without --profile routing.
+  # Requires a built .osrm graph in data/osm/ (see Phase 2).
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v26.6.5
+    profiles: ["routing"]
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./data/osm:/data:ro
+    command: osrm-routed --algorithm mld /data/koto.osrm
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # --- Backend (FastAPI) ---
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
+      - ./backend/pyproject.toml:/app/pyproject.toml
+      - ./backend/tests:/app/tests
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    restart: unless-stopped
+
+  # --- Frontend (Vite dev server) ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/public:/app/public
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
