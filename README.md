@@ -58,8 +58,53 @@ The industry is fragmented: most carriers are sub-10-person SMEs with no routing
 | Optimizer | Google OR-Tools (prize-collecting VRPTW), PyVRP (benchmark) |
 | ML | LightGBM with probability calibration, scikit-learn, pandas |
 | Geospatial | PostgreSQL 16 + PostGIS 3.4, OSRM (self-hosted) |
-| Agent | Anthropic SDK (constrained tool-use loop), Redis |
+| Agent | Constrained tool-use loop (deterministic intent parser; Anthropic SDK swap-in), Redis |
 | Infra | Docker Compose, Sentry, structlog |
+
+## The OR Core — Prize-Collecting VRPTW
+
+The optimizer is the moat. It jointly chooses, for each stop, **which time
+slot to deliver in** and **which vehicle route to use**, to maximize expected
+first-attempt successes minus driver-time cost — under capacity, time-window,
+and shift-hour limits.
+
+**Objective (maximize expected value):**
+
+```
+max  Σ_i Σ_s ( R · p_{i,s} · z_{is} )   −   λ · Σ_k Σ_{ij} t_ij · x_{ijk}
+```
+
+- `p_{i,s}` — calibrated ML probability recipient *i* is home in slot *s*
+- `z_{is}` — stop *i* assigned slot *s*; `x_{ijk}` — vehicle *k* travels *i→j*
+- `R` — reward per first-attempt success; `λ` — driver-second cost weight
+
+**OR-Tools mapping:** each candidate (stop, slot) is an optional node inside a
+single `AddDisjunction`, so at most one slot is served per stop and skipping
+forfeits its reward. The drop penalty is `round(R · p_{i,s} · SCALE)` — **this
+is exactly where the ML probability enters the solver**: higher home-probability
+⇒ higher skip penalty ⇒ the solver prefers high-probability slots. A `Time`
+dimension enforces slot windows and the shift cap; a `Capacity` dimension
+enforces vehicle load. Search uses `GUIDED_LOCAL_SEARCH` with a wall-clock limit.
+
+## How ML Feeds the Optimizer
+
+A LightGBM classifier predicts `was_home` from `(slot, day-of-week,
+address-type, floor, historical hit-rate, …)`, then **probability calibration**
+(`CalibratedClassifierCV`) makes the scores trustworthy as expected values —
+critical, because the optimizer treats `p_{i,s}` as money. The simulation
+pre-picks each stop's argmax-predicted slot (the §6.2 fallback) and maps the
+probability to the integer disjunction penalty above. Deeper observed history
+sharpens the per-slot signal, which is the ML value proposition in one line:
+*more data ⇒ better windows ⇒ fewer redeliveries.*
+
+## Solver Benchmark
+
+`POST /api/optimize/benchmark` (and the **Solver Benchmark** tab) solve the
+*same* base VRPTW instance with **OR-Tools** and **PyVRP** (a specialised VRP
+solver), reporting total route time, fleet size, feasibility, and wall-clock.
+On seeded instances both are feasible and OR-Tools matches PyVRP's optimum —
+evidence that our routing quality is sound while it also carries the richer
+prize-collecting objective.
 
 ## Quick Start
 
@@ -81,10 +126,39 @@ make seed
 open http://localhost:5173
 ```
 
-> **Note:** OSRM requires a built routing graph. After Phase 2 setup:
+> **Note:** OSRM is optional. With no routing graph the optimizer falls back to
+> Haversine travel times, so the full demo runs without it. To use real Tokyo
+> road-network times, build the graph and start the routing profile:
 > ```bash
 > docker compose --profile routing up -d
 > ```
+
+## Demo Flow
+
+One-command demo, exactly as the judges run it:
+
+```bash
+docker compose up --build -d     # boot postgres, redis, backend, frontend
+make migrate && make seed        # apply schema, seed the 5 courier slots
+open http://localhost:5173       # register an operator, then sign in
+```
+
+1. **Dashboard** — service health + platform capabilities.
+2. **Simulation** — run a single day or Monte-Carlo; watch redelivery rate
+   drop from a naive baseline toward low single digits, with driver-seconds
+   falling. Switch to **Solver Benchmark** for the OR-Tools vs PyVRP table.
+3. **Route Map** — generate routes, toggle Baseline ⇄ Takumi, stops colored by
+   first-attempt outcome, live redelivery delta.
+4. **Agent Console** — message a recipient ("I'm only home after 6pm") and the
+   constrained agent confirms the evening slot; try the 🛡️ injection probe and
+   watch it take no action; hit **Re-optimize** to push a new route over the
+   WebSocket into the live replan feed.
+
+## Screens
+
+> *Add screenshots/GIF of the split-screen map and Agent Console here for the
+> submission.* The four views above are served from a single React app
+> (sidebar nav): `Dashboard`, `Simulation`, `Route Map`, `Agent Console`.
 
 ## Development
 
