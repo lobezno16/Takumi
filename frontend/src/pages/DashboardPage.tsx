@@ -15,7 +15,7 @@ export function DashboardPage() {
     { icon: '🧠', title: 'ML Predictions', desc: 'LightGBM home-probability model with Platt calibration' },
     { icon: '🚚', title: 'Route Optimizer', desc: 'OR-Tools VRPTW with prize-collecting disjunctions' },
     { icon: '📊', title: 'Simulation Engine', desc: 'Monte Carlo baseline vs Takumi comparison' },
-    { icon: '🗺️', title: 'OSRM Routing', desc: 'Real road-network travel times for Koto-ku' },
+    { icon: '💬', title: 'Agent Coordination', desc: 'Constrained tool-use loop with live WebSocket replan' },
     { icon: '🔐', title: 'JWT Auth', desc: 'Argon2 password hashing with role-based access' },
     { icon: '⚡', title: 'Redis Cache', desc: 'Travel-time matrix caching with TTL' },
   ];
@@ -75,9 +75,9 @@ export function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           {[
             { label: 'ORM Models', value: '11' },
-            { label: 'API Endpoints', value: '20+' },
-            { label: 'Test Coverage', value: '56' },
-            { label: 'Build Phases', value: '7' },
+            { label: 'API Endpoints', value: '25+' },
+            { label: 'Backend Tests', value: '70+' },
+            { label: 'Build Phases', value: '9' },
           ].map((stat) => (
             <div key={stat.label}>
               <div className="text-3xl font-bold text-primary">{stat.value}</div>

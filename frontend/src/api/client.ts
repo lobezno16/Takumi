@@ -238,6 +238,70 @@ export function useRunDetailedSimulation() {
   });
 }
 
+// ── Agent (coordination layer) ───────────────────────────────────────
+
+export interface AgentOrder {
+  order_id: string;
+  address: string;
+  address_type: string;
+  floor: number | null;
+  assigned_slot: string | null;
+  best_slot: string;
+  best_prob: number;
+}
+
+export interface AgentSession {
+  session_id: string;
+  day_of_week: number;
+  orders: AgentOrder[];
+}
+
+export interface AgentMessageResult {
+  order_id: string;
+  action: string;
+  reply: string;
+  confirmed_slot: string | null;
+}
+
+export interface ReplanResult {
+  session_id: string;
+  reason: string;
+  status: string;
+  vehicles_used: number;
+  stops_visited: number;
+  total_seconds: number;
+}
+
+export function useCreateAgentSession() {
+  return useMutation({
+    mutationFn: (data: { n_orders: number; day_of_week: number }) =>
+      apiFetch<AgentSession>('/agent/session', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  });
+}
+
+export function useSendAgentMessage() {
+  return useMutation({
+    mutationFn: (data: { order_id: string; message: string; day_of_week: number }) =>
+      apiFetch<AgentMessageResult>('/agent/message', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  });
+}
+
+export function useReplan() {
+  return useMutation({
+    mutationFn: (data: { session_id: string; reason_code: string }) =>
+      apiFetch<ReplanResult>('/agent/replan', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  });
+}
+
 // ── Health (re-export) ───────────────────────────────────────────────
 
 export { useHealth } from './health';

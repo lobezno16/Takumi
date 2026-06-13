@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.agent import router as agent_router
 from app.api.auth import router as auth_router
 from app.api.depots import router as depots_router
 from app.api.matrix import router as matrix_router
@@ -76,6 +77,7 @@ async def health_check() -> dict[str, str]:
     return {"status": "ok", "service": "takumiroute-backend"}
 
 
+app.include_router(agent_router)
 app.include_router(auth_router)
 app.include_router(depots_router)
 app.include_router(matrix_router)

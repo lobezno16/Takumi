@@ -52,7 +52,9 @@ async def broadcast(event_type: str, data: dict[str, Any]) -> None:
     for ws in _connections:
         try:
             await ws.send_text(message)
-        except Exception:
+        except Exception:  # noqa: BLE001 — drop any client that errors on send
             dead.add(ws)
 
-    _connections -= dead
+    # Mutate in place; rebinding (`-=`) would shadow the module global and
+    # raise UnboundLocalError on the read above.
+    _connections.difference_update(dead)

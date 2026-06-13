@@ -178,7 +178,7 @@ export function MapPage() {
   const { lastDetailed, setLastDetailed } = useAppStore();
   const simMutation = useRunDetailedSimulation();
   const [policy, setPolicy] = useState<Policy>('takumi');
-  const { isConnected } = useWebSocket('/api/ws/live');
+  const { isConnected } = useWebSocket('/ws/live');
 
   const handleRun = useCallback(() => {
     simMutation.mutate(

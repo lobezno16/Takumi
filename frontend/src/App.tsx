@@ -4,9 +4,10 @@ import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { SimulationPage } from '@/pages/SimulationPage';
 import { MapPage } from '@/pages/MapPage';
+import { AgentConsole } from '@/pages/AgentConsole';
 
 type NavItem = {
-  id: 'dashboard' | 'simulation' | 'map';
+  id: 'dashboard' | 'simulation' | 'map' | 'agent';
   label: string;
   icon: string;
 };
@@ -15,6 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
   { id: 'simulation', label: 'Simulation', icon: '🧪' },
   { id: 'map', label: 'Route Map', icon: '🗺️' },
+  { id: 'agent', label: 'Agent Console', icon: '💬' },
 ];
 
 function Sidebar() {
@@ -91,6 +93,7 @@ function MainContent() {
         {currentPage === 'dashboard' && <DashboardPage />}
         {currentPage === 'simulation' && <SimulationPage />}
         {currentPage === 'map' && <MapPage />}
+        {currentPage === 'agent' && <AgentConsole />}
       </div>
     </main>
   );
