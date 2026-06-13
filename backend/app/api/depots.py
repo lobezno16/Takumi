@@ -1,10 +1,11 @@
 """CRUD API router for depots."""
+
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from geoalchemy2.functions import ST_MakePoint, ST_SetSRID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,7 @@ from app.security.deps import get_current_user
 router = APIRouter(prefix="/api/depots", tags=["depots"])
 
 
-def _depot_to_response(depot: Depot) -> dict:
+def _depot_to_response(depot: Depot) -> dict[str, Any]:
     """Convert a Depot ORM object to a response dict with lat/lon."""
     return {
         "id": depot.id,
@@ -33,7 +34,7 @@ def _depot_to_response(depot: Depot) -> dict:
 async def list_depots(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List all depots."""
     result = await db.execute(
         select(
@@ -61,7 +62,7 @@ async def create_depot(
     body: DepotCreate,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Create a new depot."""
     point = func.ST_SetSRID(func.ST_MakePoint(body.longitude, body.latitude), 4326)
     depot = Depot(
@@ -88,7 +89,7 @@ async def get_depot(
     depot_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Get a depot by ID."""
     result = await db.execute(
         select(
@@ -99,7 +100,9 @@ async def get_depot(
     )
     row = result.one_or_none()
     if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Depot not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Depot not found"
+        )
     return {
         "id": row.Depot.id,
         "name": row.Depot.name,
@@ -120,5 +123,7 @@ async def delete_depot(
     result = await db.execute(select(Depot).where(Depot.id == depot_id))
     depot = result.scalar_one_or_none()
     if depot is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Depot not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Depot not found"
+        )
     await db.delete(depot)

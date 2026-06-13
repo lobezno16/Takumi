@@ -3,6 +3,7 @@
 Calls the OSRM Table API to build NxN duration/distance matrices
 between sets of coordinates, with Redis caching.
 """
+
 from __future__ import annotations
 
 import logging
@@ -111,7 +112,9 @@ async def get_travel_time_matrix(
             "sources": result.sources,
             "destinations": result.destinations,
         }
-        await cache_set("matrix", cache_data, cache_value, ttl_seconds=_MATRIX_CACHE_TTL)
+        await cache_set(
+            "matrix", cache_data, cache_value, ttl_seconds=_MATRIX_CACHE_TTL
+        )
 
     return result
 

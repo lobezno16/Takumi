@@ -1,4 +1,5 @@
 """Route model — a vehicle's delivery route for a simulation run."""
+
 from __future__ import annotations
 
 import uuid
@@ -19,9 +20,7 @@ if TYPE_CHECKING:
 class Route(Base):
     __tablename__ = "routes"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sa.Uuid, primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
     vehicle_id: Mapped[uuid.UUID] = mapped_column(
         sa.Uuid, sa.ForeignKey("vehicles.id"), nullable=False
     )

@@ -3,6 +3,7 @@
 All tests share a session-scoped event loop and client, so multi-step
 DB operations (register → login → use token) work correctly.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -16,6 +17,7 @@ def _unique_email() -> str:
 
 
 # ── Auth unit tests (no DB needed) ────────────────────────────────────
+
 
 async def test_password_hashing() -> None:
     """Argon2 hashing should produce verifiable hashes."""
@@ -40,6 +42,7 @@ async def test_jwt_roundtrip() -> None:
 
 
 # ── Auth API tests ────────────────────────────────────────────────────
+
 
 async def test_register_new_user(client: AsyncClient) -> None:
     """POST /api/auth/register should create a user and return 201."""
@@ -156,6 +159,7 @@ async def test_get_me_invalid_token(client: AsyncClient) -> None:
 
 # ── Protected endpoint tests ──────────────────────────────────────────
 
+
 async def test_crud_endpoints_require_auth(client: AsyncClient) -> None:
     """All CRUD endpoints should return 401/403 without auth."""
     endpoints = [
@@ -173,4 +177,6 @@ async def test_crud_endpoints_require_auth(client: AsyncClient) -> None:
             resp = await client.get(path)
         else:
             resp = await client.post(path, json={})
-        assert resp.status_code in (401, 403, 422), f"{method} {path} returned {resp.status_code}"
+        assert resp.status_code in (401, 403, 422), (
+            f"{method} {path} returned {resp.status_code}"
+        )

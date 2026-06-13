@@ -1,19 +1,21 @@
 """Tests for Phase 4 — ML model, synthetic data, and prediction API."""
+
 from __future__ import annotations
 
-import numpy as np
+from itertools import pairwise
+
 import pandas as pd
 
 from app.synthetic.generator import (
     FEATURE_COLUMNS,
     generate_availability_history,
     generate_feature_row,
-    generate_stops,
     generate_orders,
+    generate_stops,
 )
 
-
 # ── Synthetic data tests ──────────────────────────────────────────────
+
 
 async def test_generate_stops() -> None:
     """Should generate stops with valid coordinates in Koto-ku."""
@@ -71,6 +73,7 @@ async def test_feature_columns_count() -> None:
 
 # ── ML model tests ───────────────────────────────────────────────────
 
+
 async def test_train_model() -> None:
     """Training on synthetic data should produce a calibrated model."""
     from app.services.ml.model import train_model
@@ -91,7 +94,7 @@ async def test_train_model() -> None:
     X = pd.DataFrame(rows)[FEATURE_COLUMNS]
     y = pd.Series(labels)
 
-    model, metrics = train_model(X, y, seed=42)
+    _model, metrics = train_model(X, y, seed=42)
 
     assert metrics["accuracy"] > 0.5  # Better than random
     assert metrics["brier_score"] < 0.3  # Reasonable calibration
@@ -156,7 +159,7 @@ async def test_probability_to_penalty() -> None:
 
     # Monotonically increasing
     penalties = [probability_to_penalty(p / 10) for p in range(11)]
-    assert all(a <= b for a, b in zip(penalties, penalties[1:]))
+    assert all(a <= b for a, b in pairwise(penalties))
 
 
 async def test_evening_higher_than_morning() -> None:
@@ -181,14 +184,24 @@ async def test_evening_higher_than_morning() -> None:
 
     # Compare AM vs t1821 for an apartment on a weekday
     am_features = {
-        "address_type_encoded": 0, "floor": 5, "slot_code_encoded": 0,
-        "day_of_week": 2, "is_weekday": 1,
-        "historical_hit_rate": 0.3, "historical_count": 10, "overall_hit_rate": 0.4,
+        "address_type_encoded": 0,
+        "floor": 5,
+        "slot_code_encoded": 0,
+        "day_of_week": 2,
+        "is_weekday": 1,
+        "historical_hit_rate": 0.3,
+        "historical_count": 10,
+        "overall_hit_rate": 0.4,
     }
     evening_features = {
-        "address_type_encoded": 0, "floor": 5, "slot_code_encoded": 4,
-        "day_of_week": 2, "is_weekday": 1,
-        "historical_hit_rate": 0.7, "historical_count": 10, "overall_hit_rate": 0.6,
+        "address_type_encoded": 0,
+        "floor": 5,
+        "slot_code_encoded": 4,
+        "day_of_week": 2,
+        "is_weekday": 1,
+        "historical_hit_rate": 0.7,
+        "historical_count": 10,
+        "overall_hit_rate": 0.6,
     }
 
     am_prob = predict_home_probability(model, am_features)

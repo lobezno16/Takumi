@@ -1,4 +1,5 @@
 """Simulation run model — stores parameters and results for baseline vs TakumiRoute."""
+
 from __future__ import annotations
 
 import uuid
@@ -18,9 +19,7 @@ if TYPE_CHECKING:
 class SimulationRun(Base):
     __tablename__ = "simulation_runs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sa.Uuid, primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
     params: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     ward: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     seed: Mapped[int] = mapped_column(sa.Integer, nullable=False)
@@ -33,9 +32,7 @@ class SimulationRun(Base):
     baseline_driver_seconds: Mapped[float | None] = mapped_column(
         sa.Float, nullable=True
     )
-    takumi_driver_seconds: Mapped[float | None] = mapped_column(
-        sa.Float, nullable=True
-    )
+    takumi_driver_seconds: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     co2_baseline_g: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     co2_takumi_g: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

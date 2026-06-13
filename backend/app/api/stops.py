@@ -1,4 +1,5 @@
 """CRUD API router for stops."""
+
 from __future__ import annotations
 
 import uuid
@@ -58,7 +59,9 @@ async def get_stop(
     result = await db.execute(select(Stop).where(Stop.id == stop_id))
     stop = result.scalar_one_or_none()
     if stop is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stop not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Stop not found"
+        )
     return stop
 
 
@@ -72,5 +75,7 @@ async def delete_stop(
     result = await db.execute(select(Stop).where(Stop.id == stop_id))
     stop = result.scalar_one_or_none()
     if stop is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stop not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Stop not found"
+        )
     await db.delete(stop)

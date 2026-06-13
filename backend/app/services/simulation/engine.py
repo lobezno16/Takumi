@@ -10,6 +10,7 @@ Each simulation run:
 4. Simulates delivery outcomes using ground-truth probabilities
 5. Computes KPIs for comparison
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,6 +44,7 @@ _HISTORY_WEEKS = 16
 @dataclass
 class SimulationKPIs:
     """Key performance indicators for a routing strategy."""
+
     total_stops: int = 0
     stops_attempted: int = 0
     stops_skipped: int = 0
@@ -59,6 +61,7 @@ class SimulationKPIs:
 @dataclass
 class RouteStopDetail:
     """Geometry + outcome for a single visited stop, for map rendering."""
+
     stop_id: str
     latitude: float
     longitude: float
@@ -72,6 +75,7 @@ class RouteStopDetail:
 @dataclass
 class RouteDetail:
     """A single vehicle's route with full geometry for the frontend map."""
+
     vehicle_id: str
     vehicle_index: int
     stops: list[RouteStopDetail] = field(default_factory=list)
@@ -82,6 +86,7 @@ class RouteDetail:
 @dataclass
 class SimulationResult:
     """Result of a single simulation run."""
+
     run_id: str
     ward: str
     seed: int
@@ -151,16 +156,13 @@ def _simulate_deliveries(
         kpis.first_attempt_success_rate = (
             kpis.deliveries_successful / kpis.stops_attempted
         )
-        kpis.redelivery_rate = (
-            kpis.deliveries_failed / kpis.stops_attempted
-        )
+        kpis.redelivery_rate = kpis.deliveries_failed / kpis.stops_attempted
 
     # Cost estimate: route time cost + redelivery cost (¥800 per failed delivery)
     cost_per_second = 0.01
     redelivery_cost = 800
     kpis.cost_estimate = round(
-        total_time * cost_per_second
-        + kpis.deliveries_failed * redelivery_cost,
+        total_time * cost_per_second + kpis.deliveries_failed * redelivery_cost,
         2,
     )
 
@@ -182,23 +184,29 @@ def _build_route_detail(
         route_stops: list[RouteStopDetail] = []
         for sequence, route_stop in enumerate(route.stops):
             stop = stops_by_id[route_stop.stop_id]
-            route_stops.append(RouteStopDetail(
-                stop_id=route_stop.stop_id,
-                latitude=stop.latitude,
-                longitude=stop.longitude,
-                sequence=sequence,
-                arrival_min=route_stop.arrival_seconds // 60,
-                assigned_slot=slot_by_stop.get(route_stop.stop_id, ""),
-                predicted_prob=round(predicted_probs.get(route_stop.stop_id, 0.5), 4),
-                outcome=outcomes.get(route_stop.stop_id, "success"),
-            ))
-        details.append(RouteDetail(
-            vehicle_id=route.vehicle_id,
-            vehicle_index=route.vehicle_index,
-            stops=route_stops,
-            duration_min=route.total_duration_seconds // 60,
-            load=route.load,
-        ))
+            route_stops.append(
+                RouteStopDetail(
+                    stop_id=route_stop.stop_id,
+                    latitude=stop.latitude,
+                    longitude=stop.longitude,
+                    sequence=sequence,
+                    arrival_min=route_stop.arrival_seconds // 60,
+                    assigned_slot=slot_by_stop.get(route_stop.stop_id, ""),
+                    predicted_prob=round(
+                        predicted_probs.get(route_stop.stop_id, 0.5), 4
+                    ),
+                    outcome=outcomes.get(route_stop.stop_id, "success"),
+                )
+            )
+        details.append(
+            RouteDetail(
+                vehicle_id=route.vehicle_id,
+                vehicle_index=route.vehicle_index,
+                stops=route_stops,
+                duration_min=route.total_duration_seconds // 60,
+                load=route.load,
+            )
+        )
     return details
 
 
@@ -233,7 +241,10 @@ def _build_baseline_routes(
         uniform_stops.append(uniform)
 
     return solve(
-        depot_lat, depot_lon, uniform_stops, vehicles,
+        depot_lat,
+        depot_lon,
+        uniform_stops,
+        vehicles,
         time_limit_seconds=10,
     )
 
@@ -271,7 +282,12 @@ async def run_simulation(
 
     logger.info(
         "Simulation %s: %d stops, %d vehicles, slot=%s, dow=%d, seed=%d",
-        run_id[:8], n_stops, n_vehicles, slot_code, day_of_week, seed,
+        run_id[:8],
+        n_stops,
+        n_vehicles,
+        slot_code,
+        day_of_week,
+        seed,
     )
 
     # 1. Generate synthetic stops
@@ -280,7 +296,9 @@ async def run_simulation(
     # 2. Generate history for feature engineering. Deeper history yields a
     #    better-calibrated per-slot signal — the ML value proposition: more
     #    observed attempts ⇒ Takumi reliably identifies each stop's best slot.
-    history = generate_availability_history(synth_stops, n_weeks=_HISTORY_WEEKS, seed=seed)
+    history = generate_availability_history(
+        synth_stops, n_weeks=_HISTORY_WEEKS, seed=seed
+    )
 
     # 3. Per-stop ground-truth schedule + ML-predicted best slot.
     #
@@ -331,19 +349,21 @@ async def run_simulation(
         takumi_pred[sid] = slot_predictions[best_slot]
         takumi_gt[sid] = ground_truth(addr, best_slot, personality)
 
-        opt_stops.append(OptStop(
-            index=i,
-            stop_id=sid,
-            latitude=stop["latitude"],
-            longitude=stop["longitude"],
-            demand=1,
-            parcel_size=rng.choice(["60", "80", "100", "120"]),
-            floor=stop.get("floor"),
-            address_type=addr,
-            penalty=probability_to_penalty(slot_predictions[best_slot]),
-            time_window_start=0,
-            time_window_end=28800,
-        ))
+        opt_stops.append(
+            OptStop(
+                index=i,
+                stop_id=sid,
+                latitude=stop["latitude"],
+                longitude=stop["longitude"],
+                demand=1,
+                parcel_size=rng.choice(["60", "80", "100", "120"]),
+                floor=stop.get("floor"),
+                address_type=addr,
+                penalty=probability_to_penalty(slot_predictions[best_slot]),
+                time_window_start=0,
+                time_window_end=28800,
+            )
+        )
 
     vehicles = [
         OptVehicle(
@@ -357,12 +377,18 @@ async def run_simulation(
 
     # 4. Run baseline (uniform penalties)
     baseline_result = _build_baseline_routes(
-        depot_lat, depot_lon, opt_stops, vehicles,
+        depot_lat,
+        depot_lon,
+        opt_stops,
+        vehicles,
     )
 
     # 5. Run Takumi (ML-driven penalties)
     takumi_result = solve(
-        depot_lat, depot_lon, opt_stops, vehicles,
+        depot_lat,
+        depot_lon,
+        opt_stops,
+        vehicles,
         time_limit_seconds=15,
     )
 
@@ -373,11 +399,17 @@ async def run_simulation(
     baseline_outcomes: dict[str, str] = {}
     takumi_outcomes: dict[str, str] = {}
     baseline_kpis = _simulate_deliveries(
-        baseline_result, opt_stops, baseline_gt, baseline_rng,
+        baseline_result,
+        opt_stops,
+        baseline_gt,
+        baseline_rng,
         outcomes=baseline_outcomes,
     )
     takumi_kpis = _simulate_deliveries(
-        takumi_result, opt_stops, takumi_gt, takumi_rng,
+        takumi_result,
+        opt_stops,
+        takumi_gt,
+        takumi_rng,
         outcomes=takumi_outcomes,
     )
 
@@ -403,8 +435,7 @@ async def run_simulation(
         takumi=takumi_kpis,
         improvement_pct=round(improvement, 2),
         solver_time_ms=(
-            baseline_result.solver_wall_time_ms
-            + takumi_result.solver_wall_time_ms
+            baseline_result.solver_wall_time_ms + takumi_result.solver_wall_time_ms
         ),
         depot_lat=depot_lat,
         depot_lon=depot_lon,
@@ -413,16 +444,23 @@ async def run_simulation(
     if detailed:
         stops_by_id = {s.stop_id: s for s in opt_stops}
         result.baseline_routes = _build_route_detail(
-            baseline_result, stops_by_id, baseline_slot,
-            baseline_pred, baseline_outcomes,
+            baseline_result,
+            stops_by_id,
+            baseline_slot,
+            baseline_pred,
+            baseline_outcomes,
         )
         result.takumi_routes = _build_route_detail(
-            takumi_result, stops_by_id, takumi_slot,
-            takumi_pred, takumi_outcomes,
+            takumi_result,
+            stops_by_id,
+            takumi_slot,
+            takumi_pred,
+            takumi_outcomes,
         )
 
     logger.info(
-        "Simulation %s complete: baseline_redeliver=%.1f%% takumi_redeliver=%.1f%% improvement=%.1f%%",
+        "Simulation %s complete: baseline_redeliver=%.1f%% "
+        "takumi_redeliver=%.1f%% improvement=%.1f%%",
         run_id[:8],
         baseline_kpis.redelivery_rate * 100,
         takumi_kpis.redelivery_rate * 100,
@@ -456,19 +494,13 @@ async def run_monte_carlo(
         results.append(result)
 
     # Aggregate
-    avg_baseline_redeliver = sum(
-        r.baseline.redelivery_rate for r in results
-    ) / len(results)
-    avg_takumi_redeliver = sum(
-        r.takumi.redelivery_rate for r in results
-    ) / len(results)
+    avg_baseline_redeliver = sum(r.baseline.redelivery_rate for r in results) / len(
+        results
+    )
+    avg_takumi_redeliver = sum(r.takumi.redelivery_rate for r in results) / len(results)
     avg_improvement = sum(r.improvement_pct for r in results) / len(results)
-    avg_baseline_cost = sum(
-        r.baseline.cost_estimate for r in results
-    ) / len(results)
-    avg_takumi_cost = sum(
-        r.takumi.cost_estimate for r in results
-    ) / len(results)
+    avg_baseline_cost = sum(r.baseline.cost_estimate for r in results) / len(results)
+    avg_takumi_cost = sum(r.takumi.cost_estimate for r in results) / len(results)
 
     return {
         "n_runs": n_runs,
@@ -479,7 +511,8 @@ async def run_monte_carlo(
         "avg_takumi_cost": round(avg_takumi_cost, 2),
         "cost_savings_pct": round(
             (avg_baseline_cost - avg_takumi_cost) / avg_baseline_cost * 100
-            if avg_baseline_cost > 0 else 0,
+            if avg_baseline_cost > 0
+            else 0,
             2,
         ),
         "runs": [

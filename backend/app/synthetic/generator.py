@@ -10,11 +10,12 @@ Pattern rationale: Japanese households have strong temporal patterns.
 - Houses: moderate AM (elderly/WFH), high afternoon/evening
 - Weekend vs weekday shifts patterns significantly
 """
+
 from __future__ import annotations
 
 import random
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -78,7 +79,7 @@ def generate_stops(
     """
     rng = random.Random(seed)
     stops = []
-    for i in range(n_stops):
+    for _ in range(n_stops):
         is_apt = rng.random() < apartment_ratio
         addr_type = AddressType.APARTMENT if is_apt else AddressType.HOUSE
 
@@ -90,14 +91,16 @@ def generate_stops(
         banchi = rng.randint(1, 30)
         go = rng.randint(1, 20)
 
-        stops.append({
-            "id": str(uuid.uuid4()),
-            "address": f"東京都江東区{chome}丁目{banchi}-{go}",
-            "latitude": lat,
-            "longitude": lon,
-            "address_type": addr_type.value,
-            "floor": floor_val,
-        })
+        stops.append(
+            {
+                "id": str(uuid.uuid4()),
+                "address": f"東京都江東区{chome}丁目{banchi}-{go}",
+                "latitude": lat,
+                "longitude": lon,
+                "address_type": addr_type.value,
+                "floor": floor_val,
+            }
+        )
     return stops
 
 
@@ -121,12 +124,14 @@ def generate_orders(
     for stop in stops:
         n_orders = rng.randint(*orders_per_stop)
         for _ in range(n_orders):
-            orders.append({
-                "id": str(uuid.uuid4()),
-                "stop_id": stop["id"],
-                "parcel_size": rng.choice(_PARCEL_SIZES),
-                "demand": 1,
-            })
+            orders.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "stop_id": stop["id"],
+                    "parcel_size": rng.choice(_PARCEL_SIZES),
+                    "demand": 1,
+                }
+            )
     return orders
 
 
@@ -155,16 +160,16 @@ def generate_availability_history(
     np_rng = np.random.RandomState(seed)
     history = []
 
-    base_date = datetime(2025, 1, 6, tzinfo=timezone.utc)  # A Monday
+    base_date = datetime(2025, 1, 6, tzinfo=UTC)  # A Monday
 
     for stop in stops:
         # Per-stop personality: some people are consistently more/less home
         personality_bias = np_rng.normal(0, 0.08)
 
         for week in range(n_weeks):
-            n_attempts = max(1, rng.randint(
-                attempts_per_week - 1, attempts_per_week + 1
-            ))
+            n_attempts = max(
+                1, rng.randint(attempts_per_week - 1, attempts_per_week + 1)
+            )
             for _ in range(n_attempts):
                 day_offset = rng.randint(0, 6)
                 day_of_week = day_offset  # 0=Mon...6=Sun
@@ -195,14 +200,16 @@ def generate_availability_history(
                     minutes=rng.randint(0, 59),
                 )
 
-                history.append({
-                    "id": str(uuid.uuid4()),
-                    "stop_id": stop["id"],
-                    "slot_code": slot_code,
-                    "day_of_week": day_of_week,
-                    "attempt_ts": attempt_ts.isoformat(),
-                    "was_home": was_home,
-                })
+                history.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "stop_id": stop["id"],
+                        "slot_code": slot_code,
+                        "day_of_week": day_of_week,
+                        "attempt_ts": attempt_ts.isoformat(),
+                        "was_home": was_home,
+                    }
+                )
 
     return history
 

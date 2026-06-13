@@ -13,6 +13,7 @@ Security rationale (§13.10): the decision in step 3 depends only on the
 enumerated ``SlotCode | None`` from step 2 — never on the raw text — so a
 prompt-injection message simply yields ``None`` and a ``NO_ACTION`` outcome.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -43,6 +44,7 @@ _SLOT_LABELS: dict[SlotCode, str] = {
 @dataclass
 class AgentResult:
     """Outcome of one turn of the loop."""
+
     order_id: str
     action: AgentAction
     reply: str
@@ -57,14 +59,16 @@ async def _log(
     parsed_intent: dict[str, Any] | None,
     action: AgentAction | None,
 ) -> None:
-    db.add(AgentInteraction(
-        order_id=order_id,
-        channel="line",
-        direction=direction,
-        raw_message=message,
-        parsed_intent=parsed_intent,
-        action_taken=action,
-    ))
+    db.add(
+        AgentInteraction(
+            order_id=order_id,
+            channel="line",
+            direction=direction,
+            raw_message=message,
+            parsed_intent=parsed_intent,
+            action_taken=action,
+        )
+    )
     await db.flush()
 
 
@@ -105,5 +109,8 @@ async def handle_message(
 
     await _log(db, order_id, AgentDirection.OUT, reply, intent_json, action)
     return AgentResult(
-        order_id=str(order_id), action=action, reply=reply, detail=detail,
+        order_id=str(order_id),
+        action=action,
+        reply=reply,
+        detail=detail,
     )

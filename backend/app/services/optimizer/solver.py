@@ -11,12 +11,12 @@ This module implements the core routing optimization:
 The optimizer produces routes that maximize expected successful deliveries
 while respecting vehicle capacity, time windows, and route duration limits.
 """
+
 from __future__ import annotations
 
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Service time per parcel size (seconds)
 _SERVICE_TIME_BY_SIZE = {
-    "60": 120,   # Small: 2 min
-    "80": 150,   # Medium: 2.5 min
+    "60": 120,  # Small: 2 min
+    "80": 150,  # Medium: 2.5 min
     "100": 180,  # Large: 3 min
     "120": 240,  # XL: 4 min
 }
@@ -37,6 +37,7 @@ _FLOOR_PENALTY_SECONDS = 15
 @dataclass
 class OptStop:
     """A stop to consider for routing."""
+
     index: int
     stop_id: str
     latitude: float
@@ -53,6 +54,7 @@ class OptStop:
 @dataclass
 class OptVehicle:
     """A vehicle available for routing."""
+
     index: int
     vehicle_id: str
     capacity: int = 80
@@ -63,6 +65,7 @@ class OptVehicle:
 @dataclass
 class OptResult:
     """Result of the optimization."""
+
     status: str  # "optimal", "feasible", "no_solution"
     routes: list[OptRoute]
     total_distance_seconds: int = 0
@@ -75,6 +78,7 @@ class OptResult:
 @dataclass
 class OptRoute:
     """A single vehicle's optimized route."""
+
     vehicle_id: str
     vehicle_index: int
     stops: list[OptRouteStop] = field(default_factory=list)
@@ -86,6 +90,7 @@ class OptRoute:
 @dataclass
 class OptRouteStop:
     """A stop in an optimized route."""
+
     stop_id: str
     stop_index: int
     arrival_seconds: int = 0
@@ -95,7 +100,10 @@ class OptRouteStop:
 
 
 def _haversine_seconds(
-    lat1: float, lon1: float, lat2: float, lon2: float,
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
     speed_kmh: float = 25.0,
 ) -> int:
     """Haversine distance converted to travel time in seconds.
@@ -147,11 +155,9 @@ def build_travel_time_matrix(
         # OSRM matrix is already in the right format
         return [[int(cell) for cell in row] for row in osrm_matrix]
 
-    # Fallback: Haversine
+    # Fall back to Haversine great-circle travel times.
     n = len(stops) + 1  # +1 for depot
-    all_coords = [(depot_lat, depot_lon)] + [
-        (s.latitude, s.longitude) for s in stops
-    ]
+    all_coords = [(depot_lat, depot_lon)] + [(s.latitude, s.longitude) for s in stops]
 
     matrix = []
     for i in range(n):
@@ -160,10 +166,14 @@ def build_travel_time_matrix(
             if i == j:
                 row.append(0)
             else:
-                row.append(_haversine_seconds(
-                    all_coords[i][0], all_coords[i][1],
-                    all_coords[j][0], all_coords[j][1],
-                ))
+                row.append(
+                    _haversine_seconds(
+                        all_coords[i][0],
+                        all_coords[i][1],
+                        all_coords[j][0],
+                        all_coords[j][1],
+                    )
+                )
         matrix.append(row)
 
     return matrix
@@ -200,9 +210,7 @@ def solve(
     n_nodes = n_stops + 1  # node 0 = depot
 
     # Build travel time matrix if not provided
-    matrix = travel_time_matrix or build_travel_time_matrix(
-        depot_lat, depot_lon, stops
-    )
+    matrix = travel_time_matrix or build_travel_time_matrix(depot_lat, depot_lon, stops)
 
     # Service times per node
     service_times = [0]  # depot has 0 service time
@@ -288,7 +296,9 @@ def solve(
     # ── Solve ─────────────────────────────────────────────────────────
     logger.info(
         "Solving VRPTW: %d stops, %d vehicles, time_limit=%ds",
-        n_stops, n_vehicles, time_limit_seconds,
+        n_stops,
+        n_vehicles,
+        time_limit_seconds,
     )
     solution = routing.SolveWithParameters(search_params)
 
@@ -324,14 +334,16 @@ def solve(
                 svc_time = service_times[node]
                 route_load += stop.demand
 
-                route.stops.append(OptRouteStop(
-                    stop_id=stop.stop_id,
-                    stop_index=stop.index,
-                    arrival_seconds=arrival,
-                    departure_seconds=arrival + svc_time,
-                    service_time_seconds=svc_time,
-                    cumulative_load=route_load,
-                ))
+                route.stops.append(
+                    OptRouteStop(
+                        stop_id=stop.stop_id,
+                        stop_index=stop.index,
+                        arrival_seconds=arrival,
+                        departure_seconds=arrival + svc_time,
+                        service_time_seconds=svc_time,
+                        cumulative_load=route_load,
+                    )
+                )
 
             index = solution.Value(routing.NextVar(index))
 

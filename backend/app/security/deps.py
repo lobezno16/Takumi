@@ -1,4 +1,5 @@
 """FastAPI security dependencies — current user extraction and role checks."""
+
 from __future__ import annotations
 
 import uuid

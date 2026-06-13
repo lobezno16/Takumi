@@ -3,6 +3,7 @@
 This module manages the lifecycle of the trained model and exposes
 a clean interface for the optimizer and API to request predictions.
 """
+
 from __future__ import annotations
 
 import logging
@@ -10,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 
 from app.services.ml.model import (
-    CalibratedClassifierCV,
     load_model,
     predict_home_probability,
     probability_to_penalty,
@@ -110,7 +111,7 @@ async def predict_for_stop(
     """
     model = await get_model()
     features = generate_feature_row(stop, slot_code, day_of_week, history)
-    prob = predict_home_probability(model, features)
+    prob = float(predict_home_probability(model, features))
     penalty = probability_to_penalty(prob)
 
     return {
@@ -139,11 +140,13 @@ async def predict_candidate_slots(
     for slot in SlotCode:
         features = generate_feature_row(stop, slot.value, day_of_week, history)
         prob = predict_home_probability(model, features)
-        results.append({
-            "slot_code": slot.value,
-            "predicted_prob": round(float(prob), 4),
-            "penalty": probability_to_penalty(float(prob)),
-        })
+        results.append(
+            {
+                "slot_code": slot.value,
+                "predicted_prob": round(float(prob), 4),
+                "penalty": probability_to_penalty(float(prob)),
+            }
+        )
 
     # Sort by probability descending — best slots first
     results.sort(key=lambda x: x["predicted_prob"], reverse=True)

@@ -14,6 +14,7 @@ A production deployment may swap the keyword matcher below for an LLM call to
 extract the requested window, but the loop downstream still constrains the
 result to this enum, so the security property is preserved regardless.
 """
+
 from __future__ import annotations
 
 import re
@@ -43,6 +44,7 @@ _KEYWORD_SLOTS: list[tuple[tuple[str, ...], SlotCode]] = [
 @dataclass(frozen=True)
 class ParsedIntent:
     """Result of interpreting recipient text. ``slot`` is the only payload."""
+
     slot: SlotCode | None
     matched_text: str | None
 

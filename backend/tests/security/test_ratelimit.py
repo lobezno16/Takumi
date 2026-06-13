@@ -5,6 +5,7 @@ repeated logins don't trip it; this test exercises the same slowapi
 integration (limiter + exception handler) on an isolated app to prove the
 mechanism and the 429 response shape.
 """
+
 from __future__ import annotations
 
 from fastapi import FastAPI, Request

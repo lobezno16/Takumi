@@ -1,4 +1,5 @@
 """Stop model — delivery destination with PostGIS location."""
+
 from __future__ import annotations
 
 import uuid
@@ -18,9 +19,7 @@ if TYPE_CHECKING:
 class Stop(Base):
     __tablename__ = "stops"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sa.Uuid, primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
     address: Mapped[str] = mapped_column(sa.Text, nullable=False)
     location: Mapped[str] = mapped_column(
         Geography(geometry_type="POINT", srid=4326, spatial_index=True),

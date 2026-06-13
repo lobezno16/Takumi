@@ -5,6 +5,7 @@ classic injection payloads never produce an off-allowlist or unintended
 action: the parser yields no slot, and posting such a message leaves the
 order untouched with a NO_ACTION outcome.
 """
+
 from __future__ import annotations
 
 import uuid

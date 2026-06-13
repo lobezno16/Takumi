@@ -4,6 +4,7 @@ Exposes a constrained surface: seed a coordination session, deliver an inbound
 recipient message to the constrained loop, trigger a replan, and read the
 audit trail. All recipient text is treated as untrusted data (§13.10).
 """
+
 from __future__ import annotations
 
 import json
@@ -22,11 +23,12 @@ from app.models.order import Order
 from app.models.stop import Stop
 from app.models.user import User
 from app.security.deps import get_current_user
+from app.security.ratelimit import limiter
 from app.services.agent import tools
 from app.services.agent.guards import AgentGuardError
-from app.security.ratelimit import limiter
 from app.services.agent.loop import handle_message
 from app.services.cache import get_redis
+from app.services.ml.predict import predict_candidate_slots
 from app.synthetic.generator import generate_stops
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -124,22 +126,27 @@ async def create_session(
         await db.flush()
         order_ids.append(str(order.id))
 
-        candidates = await tools.predict_candidate_slots(
-            stop={"id": str(stop.id), "address_type": stop.address_type.value,
-                  "floor": stop.floor},
+        candidates = await predict_candidate_slots(
+            stop={
+                "id": str(stop.id),
+                "address_type": stop.address_type.value,
+                "floor": stop.floor,
+            },
             day_of_week=body.day_of_week,
             history=[],
         )
         best = candidates[0]
-        summaries.append(OrderSummary(
-            order_id=str(order.id),
-            address=stop.address,
-            address_type=stop.address_type.value,
-            floor=stop.floor,
-            assigned_slot=order.assigned_slot_code,
-            best_slot=best["slot_code"],
-            best_prob=best["predicted_prob"],
-        ))
+        summaries.append(
+            OrderSummary(
+                order_id=str(order.id),
+                address=stop.address,
+                address_type=stop.address_type.value,
+                floor=stop.floor,
+                assigned_slot=order.assigned_slot_code,
+                best_slot=best["slot_code"],
+                best_prob=best["predicted_prob"],
+            )
+        )
 
     session_id = str(uuid.uuid4())
     redis = await get_redis()
@@ -149,7 +156,9 @@ async def create_session(
         ex=_SESSION_TTL_SECONDS,
     )
     return SessionResponse(
-        session_id=session_id, day_of_week=body.day_of_week, orders=summaries,
+        session_id=session_id,
+        day_of_week=body.day_of_week,
+        orders=summaries,
     )
 
 
@@ -163,9 +172,7 @@ async def post_message(
 ) -> MessageResponse:
     """Deliver an inbound recipient message to the constrained agent loop."""
     try:
-        result = await handle_message(
-            db, body.order_id, body.message, body.day_of_week
-        )
+        result = await handle_message(db, body.order_id, body.message, body.day_of_week)
     except AgentGuardError as exc:
         # Generic client error; details stay in server logs (§13.15).
         raise HTTPException(

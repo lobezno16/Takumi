@@ -50,7 +50,7 @@ app = FastAPI(
 # Rate limiting (slowapi) — limiter lives on app.state; per-route limits are
 # applied via @limiter.limit on auth and expensive endpoints (§13.8).
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # Security rationale: CORS locked to known frontend origin with explicit
 # methods and headers — never use wildcards in production.
@@ -77,9 +77,7 @@ async def security_headers_middleware(
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = (
-        "geolocation=(), camera=(), microphone=()"
-    )
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     if "server" in response.headers:
         del response.headers["server"]
     return response
@@ -92,12 +90,15 @@ async def body_size_limit_middleware(
 ) -> Response:
     """Reject oversized request bodies before they are read (§13.4)."""
     content_length = request.headers.get("content-length")
-    if content_length is not None and content_length.isdigit():
-        if int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
-            return JSONResponse(
-                status_code=413,  # Content Too Large
-                content={"detail": "Request body too large"},
-            )
+    if (
+        content_length is not None
+        and content_length.isdigit()
+        and int(content_length) > settings.MAX_REQUEST_BODY_BYTES
+    ):
+        return JSONResponse(
+            status_code=413,  # Content Too Large
+            content={"detail": "Request body too large"},
+        )
     return await call_next(request)
 
 

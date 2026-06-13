@@ -5,6 +5,7 @@ Every tool validates its arguments (UUIDs, enums, allowlisted reason codes)
 before touching the database, Redis, or the WebSocket. No tool accepts free
 text, so untrusted recipient input can never reach a destructive operation.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,12 +25,14 @@ from app.services.ml.predict import predict_candidate_slots
 from app.services.optimizer.solver import OptStop, OptVehicle, solve
 
 # Allowlisted machine reason codes for a replan request — never free text.
-REPLAN_REASONS: frozenset[str] = frozenset({
-    "recipient_unavailable",
-    "window_changed",
-    "traffic",
-    "manual",
-})
+REPLAN_REASONS: frozenset[str] = frozenset(
+    {
+        "recipient_unavailable",
+        "window_changed",
+        "traffic",
+        "manual",
+    }
+)
 
 _DEPOT_LAT, _DEPOT_LON = 35.672, 139.817
 
@@ -40,7 +43,8 @@ async def _load_order_with_coords(
     """Load an order, its stop, and the stop's coordinates, or raise."""
     result = await db.execute(
         select(
-            Order, Stop,
+            Order,
+            Stop,
             func.ST_Y(cast(Stop.location, Geometry)),
             func.ST_X(cast(Stop.location, Geometry)),
         )
@@ -60,8 +64,11 @@ async def get_candidate_slots(
     """Return ML-ranked candidate slots for an order's recipient."""
     _order, stop, _lat, _lon = await _load_order_with_coords(db, order_id)
     candidates = await predict_candidate_slots(
-        stop={"id": str(stop.id), "address_type": stop.address_type.value,
-              "floor": stop.floor},
+        stop={
+            "id": str(stop.id),
+            "address_type": stop.address_type.value,
+            "floor": stop.floor,
+        },
         day_of_week=day_of_week,
         history=[],
     )
@@ -118,7 +125,7 @@ async def request_replan(
     order_ids = [uuid.UUID(x) for x in json.loads(order_ids_raw)]
 
     # Enqueue the job for auditability (§10 Redis replan queue).
-    await redis.lpush(
+    await redis.lpush(  # type: ignore[misc]
         "takumi:replan",
         json.dumps({"session_id": str(session_id), "reason": reason_code}),
     )
@@ -126,7 +133,8 @@ async def request_replan(
     # Re-solve over the session's stops using ML-derived penalties.
     rows = await db.execute(
         select(
-            Order, Stop,
+            Order,
+            Stop,
             func.ST_Y(cast(Stop.location, Geometry)),
             func.ST_X(cast(Stop.location, Geometry)),
         )
@@ -137,17 +145,19 @@ async def request_replan(
     for i, (order, stop, lat, lon) in enumerate(rows.all()):
         # Confirmed windows are high-confidence: they earn the top penalty.
         penalty = 10000 if order.status == OrderStatus.ASSIGNED else 5000
-        opt_stops.append(OptStop(
-            index=i,
-            stop_id=str(order.id),
-            latitude=float(lat),
-            longitude=float(lon),
-            demand=order.demand,
-            parcel_size=order.parcel_size.value,
-            floor=stop.floor,
-            address_type=stop.address_type.value,
-            penalty=penalty,
-        ))
+        opt_stops.append(
+            OptStop(
+                index=i,
+                stop_id=str(order.id),
+                latitude=float(lat),
+                longitude=float(lon),
+                demand=order.demand,
+                parcel_size=order.parcel_size.value,
+                floor=stop.floor,
+                address_type=stop.address_type.value,
+                penalty=penalty,
+            )
+        )
 
     vehicles = [
         OptVehicle(index=v, vehicle_id=f"v-{v}", capacity=max(20, len(opt_stops)))

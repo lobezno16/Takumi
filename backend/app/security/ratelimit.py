@@ -5,6 +5,7 @@ simulation, agent) are rate-limited per client to blunt brute-force and
 resource-exhaustion abuse. Limits are keyed by authenticated user when a
 bearer token is present, falling back to remote address otherwise.
 """
+
 from __future__ import annotations
 
 from slowapi import Limiter

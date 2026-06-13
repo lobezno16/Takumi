@@ -1,7 +1,9 @@
 """CRUD API router for orders."""
+
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -58,7 +60,9 @@ async def get_order(
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     if order is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
     return order
 
 
@@ -73,24 +77,25 @@ async def update_order_status(
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
     if order is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
     order.status = body.status
     await db.flush()
     await db.refresh(order)
     return order
 
 
-@router.get("/slots", response_model=list[dict])
+@router.get("/slots", response_model=list[dict[str, Any]])
 async def list_slots(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List all available delivery time slots."""
     from app.models.slot import Slot
 
     result = await db.execute(select(Slot).order_by(Slot.start_min))
     slots = result.scalars().all()
     return [
-        {"code": s.code, "start_min": s.start_min, "end_min": s.end_min}
-        for s in slots
+        {"code": s.code, "start_min": s.start_min, "end_min": s.end_min} for s in slots
     ]

@@ -1,4 +1,5 @@
 """Tests for Phase 1 — Data Layer: models, migration, and seed data."""
+
 from __future__ import annotations
 
 from httpx import AsyncClient
@@ -93,7 +94,7 @@ async def test_schemas_extra_forbid() -> None:
     import pytest
     from pydantic import ValidationError
 
-    from app.schemas import UserCreate, OrderCreate, StopCreate
+    from app.schemas import OrderCreate, StopCreate, UserCreate
 
     with pytest.raises(ValidationError):
         UserCreate(email="test@test.com", password="12345678", extra_field="bad")
@@ -139,8 +140,8 @@ async def test_schema_field_validation() -> None:
 
 async def test_base_metadata_has_all_tables() -> None:
     """Base.metadata should contain all 11 application tables."""
-    from app.db import Base
     import app.models  # noqa: F401
+    from app.db import Base
 
     table_names = set(Base.metadata.tables.keys())
     expected = {

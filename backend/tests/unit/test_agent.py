@@ -1,4 +1,5 @@
 """Tests for Phase 9 — the agentic coordination layer."""
+
 from __future__ import annotations
 
 import uuid
@@ -14,8 +15,8 @@ from app.services.agent.guards import (
 )
 from app.services.agent.intent import parse_intent
 
-
 # ── Intent parsing (pure, fast) ───────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     ("message", "expected"),
@@ -49,6 +50,7 @@ def test_parse_intent_no_time_signal_returns_none(message: str) -> None:
 
 # ── Guards (pure, fast) ───────────────────────────────────────────────
 
+
 def test_validate_slot_code_accepts_enum_values() -> None:
     assert validate_slot_code("t1821") == SlotCode.T1821
 
@@ -70,6 +72,7 @@ def test_validate_order_id_accepts_uuid() -> None:
 
 
 # ── Integration: confirm flow + audit trail ───────────────────────────
+
 
 async def _auth_headers(client: AsyncClient) -> dict[str, str]:
     email = f"agent-{uuid.uuid4().hex[:8]}@test.local"

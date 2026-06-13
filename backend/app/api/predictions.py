@@ -1,4 +1,5 @@
 """API router for ML predictions — home probabilities and candidate slots."""
+
 from __future__ import annotations
 
 from typing import Any

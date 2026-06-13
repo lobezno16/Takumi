@@ -1,4 +1,5 @@
 """JWT authentication and Argon2 password hashing utilities."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -30,8 +31,7 @@ def create_access_token(
     """Create a short-lived signed JWT access token."""
     to_encode = data.copy()
     expire = datetime.now(UTC) + (
-        expires_delta
-        or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     to_encode.update({"exp": expire, "iat": datetime.now(UTC), "type": "access"})
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
@@ -40,9 +40,7 @@ def create_access_token(
 def create_refresh_token(data: dict[str, Any]) -> str:
     """Create a long-lived signed JWT refresh token."""
     to_encode = data.copy()
-    expire = datetime.now(UTC) + timedelta(
-        days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "iat": datetime.now(UTC), "type": "refresh"})
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 

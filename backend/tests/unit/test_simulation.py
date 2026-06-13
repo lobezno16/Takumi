@@ -1,15 +1,15 @@
 """Tests for Phase 6 — Simulation engine."""
+
 from __future__ import annotations
 
+from app.services.optimizer.solver import OptResult, OptRoute, OptRouteStop, OptStop
 from app.services.simulation.engine import (
-    SimulationKPIs,
     _simulate_deliveries,
     run_simulation,
 )
-from app.services.optimizer.solver import OptResult, OptRoute, OptRouteStop, OptStop
-
 
 # ── Unit tests ────────────────────────────────────────────────────────
+
 
 async def test_simulate_deliveries_all_home() -> None:
     """If everyone is home (prob=1.0), all deliveries should succeed."""
@@ -20,7 +20,8 @@ async def test_simulate_deliveries_all_home() -> None:
         OptStop(index=1, stop_id="s2", latitude=35.68, longitude=139.82),
     ]
     route = OptRoute(
-        vehicle_id="v1", vehicle_index=0,
+        vehicle_id="v1",
+        vehicle_index=0,
         stops=[
             OptRouteStop(stop_id="s1", stop_index=0),
             OptRouteStop(stop_id="s2", stop_index=1),
@@ -46,7 +47,8 @@ async def test_simulate_deliveries_none_home() -> None:
         OptStop(index=0, stop_id="s1", latitude=35.67, longitude=139.82),
     ]
     route = OptRoute(
-        vehicle_id="v1", vehicle_index=0,
+        vehicle_id="v1",
+        vehicle_index=0,
         stops=[OptRouteStop(stop_id="s1", stop_index=0)],
         total_duration_seconds=500,
     )
@@ -68,7 +70,8 @@ async def test_simulate_deliveries_cost_includes_redelivery() -> None:
         OptStop(index=0, stop_id="s1", latitude=35.67, longitude=139.82),
     ]
     route = OptRoute(
-        vehicle_id="v1", vehicle_index=0,
+        vehicle_id="v1",
+        vehicle_index=0,
         stops=[OptRouteStop(stop_id="s1", stop_index=0)],
         total_duration_seconds=1000,
     )
@@ -92,7 +95,8 @@ async def test_kpis_skipped_stops() -> None:
     ]
     # Only visit s1
     route = OptRoute(
-        vehicle_id="v1", vehicle_index=0,
+        vehicle_id="v1",
+        vehicle_index=0,
         stops=[OptRouteStop(stop_id="s1", stop_index=0)],
         total_duration_seconds=500,
     )
@@ -107,6 +111,7 @@ async def test_kpis_skipped_stops() -> None:
 
 
 # ── Integration test ─────────────────────────────────────────────────
+
 
 async def test_run_simulation_produces_valid_result() -> None:
     """A full simulation run should produce valid KPIs for both strategies."""
@@ -153,7 +158,11 @@ async def test_takumi_beats_naive_baseline_via_slot_selection() -> None:
     """Against a naive AM-only baseline, Takumi must cut redelivery by
     choosing each recipient's best-predicted window (the project thesis)."""
     result = await run_simulation(
-        n_stops=30, n_vehicles=3, slot_code="am", day_of_week=2, seed=5,
+        n_stops=30,
+        n_vehicles=3,
+        slot_code="am",
+        day_of_week=2,
+        seed=5,
         detailed=True,
     )
 
@@ -163,9 +172,7 @@ async def test_takumi_beats_naive_baseline_via_slot_selection() -> None:
 
     # Slot selection actually varied — Takumi did not just copy the AM default.
     chosen = {
-        stop.assigned_slot
-        for route in result.takumi_routes
-        for stop in route.stops
+        stop.assigned_slot for route in result.takumi_routes for stop in route.stops
     }
     assert chosen - {"am"}, "Takumi should pick non-AM windows for some stops"
 
@@ -173,7 +180,11 @@ async def test_takumi_beats_naive_baseline_via_slot_selection() -> None:
 async def test_detailed_routes_have_geometry() -> None:
     """Detailed runs expose real per-stop coordinates and outcomes for the map."""
     result = await run_simulation(
-        n_stops=12, n_vehicles=2, slot_code="am", seed=7, detailed=True,
+        n_stops=12,
+        n_vehicles=2,
+        slot_code="am",
+        seed=7,
+        detailed=True,
     )
 
     assert result.depot_lat != 0.0 and result.depot_lon != 0.0

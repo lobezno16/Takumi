@@ -1,4 +1,5 @@
 """Availability history — ML training source for home-probability prediction."""
+
 from __future__ import annotations
 
 import uuid
@@ -17,9 +18,7 @@ if TYPE_CHECKING:
 class AvailabilityHistory(Base):
     __tablename__ = "availability_history"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sa.Uuid, primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
     stop_id: Mapped[uuid.UUID] = mapped_column(
         sa.Uuid, sa.ForeignKey("stops.id"), nullable=False
     )
@@ -32,9 +31,10 @@ class AvailabilityHistory(Base):
 
     stop: Mapped[Stop] = relationship()
 
-    __table_args__ = (
-        sa.Index("ix_availability_stop_slot", "stop_id", "slot_code"),
-    )
+    __table_args__ = (sa.Index("ix_availability_stop_slot", "stop_id", "slot_code"),)
 
     def __repr__(self) -> str:
-        return f"<AvailabilityHistory stop={self.stop_id} slot={self.slot_code} home={self.was_home}>"
+        return (
+            f"<AvailabilityHistory stop={self.stop_id} "
+            f"slot={self.slot_code} home={self.was_home}>"
+        )

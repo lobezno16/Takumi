@@ -1,4 +1,5 @@
 """API router for route optimization."""
+
 from __future__ import annotations
 
 import random
@@ -194,7 +195,7 @@ async def benchmark_solvers(
     Both solvers route the same synthetic instance with every stop required,
     so the result is an apples-to-apples quality + wall-clock comparison.
     """
-    seed = body.seed if body.seed is not None else random.randint(0, 2**31)  # noqa: S311
+    seed = body.seed if body.seed is not None else random.randint(0, 2**31)
     rng = random.Random(seed)
     synth = generate_stops(n_stops=body.n_stops, seed=seed)
     stops = [
@@ -221,14 +222,14 @@ async def benchmark_solvers(
     ]
 
     result = run_benchmark(
-        35.672, 139.817, stops, vehicles,
+        35.672,
+        139.817,
+        stops,
+        vehicles,
         time_limit_seconds=body.time_limit_seconds,
     )
     ort_s = result.ortools.total_route_seconds
-    gap = (
-        (result.pyvrp.total_route_seconds - ort_s) / ort_s * 100
-        if ort_s > 0 else 0.0
-    )
+    gap = (result.pyvrp.total_route_seconds - ort_s) / ort_s * 100 if ort_s > 0 else 0.0
     return BenchmarkResponse(
         n_stops=result.n_stops,
         n_vehicles=result.n_vehicles,

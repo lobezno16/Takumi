@@ -10,6 +10,7 @@ The calibrated probabilities p_{i,s} are critical for the OR-Tools
 prize-collecting VRPTW: they map to integer disjunction penalties that
 control whether the optimizer visits a stop in a given time window.
 """
+
 from __future__ import annotations
 
 import logging
@@ -90,9 +91,9 @@ def train_model(
     # Log loss
     eps = 1e-15
     y_clipped = np.clip(y_pred_proba, eps, 1 - eps)
-    log_loss_val = float(-np.mean(
-        y_test * np.log(y_clipped) + (1 - y_test) * np.log(1 - y_clipped)
-    ))
+    log_loss_val = float(
+        -np.mean(y_test * np.log(y_clipped) + (1 - y_test) * np.log(1 - y_clipped))
+    )
 
     metrics = {
         "accuracy": accuracy,
@@ -105,7 +106,11 @@ def train_model(
 
     logger.info(
         "Model trained: accuracy=%.3f brier=%.4f logloss=%.4f (train=%d test=%d)",
-        accuracy, brier_score, log_loss_val, len(X_train), len(X_test),
+        accuracy,
+        brier_score,
+        log_loss_val,
+        len(X_train),
+        len(X_test),
     )
 
     return calibrated_model, metrics
@@ -148,9 +153,8 @@ def predict_home_probability(
     if isinstance(features, dict):
         df = pd.DataFrame([features])[FEATURE_COLUMNS]
         return float(model.predict_proba(df)[0, 1])
-    else:
-        df = features[FEATURE_COLUMNS]
-        return model.predict_proba(df)[:, 1]
+    df = features[FEATURE_COLUMNS]
+    return model.predict_proba(df)[:, 1]
 
 
 def probability_to_penalty(

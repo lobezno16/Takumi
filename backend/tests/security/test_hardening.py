@@ -1,4 +1,5 @@
 """Security tests (§13) — input validation, SQL safety, PII, headers, errors."""
+
 from __future__ import annotations
 
 import re
@@ -102,9 +103,7 @@ async def test_oversized_body_rejected() -> None:
 async def test_protected_endpoint_requires_auth() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://t") as ac:
-        r = await ac.post(
-            "/api/agent/session", json={"n_orders": 1, "day_of_week": 2}
-        )
+        r = await ac.post("/api/agent/session", json={"n_orders": 1, "day_of_week": 2})
     assert r.status_code in (401, 403)
 
 

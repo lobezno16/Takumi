@@ -8,6 +8,7 @@ time-window limits) with PyVRP — a specialised, high-quality VRP solver — an
 compare total route time, feasibility, fleet size, and wall-clock. OR-Tools
 gives us the flexible objective; PyVRP gives a quality yardstick.
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,6 +39,7 @@ _COORD_SCALE = 100_000
 @dataclass
 class SolverBenchmark:
     """One solver's result on the shared instance."""
+
     solver: str
     feasible: bool
     total_route_seconds: int
@@ -89,7 +91,8 @@ def _run_pyvrp(
     for i, frm in enumerate(locations):
         for j, to in enumerate(locations):
             if i != j:
-                model.add_edge(frm, to, distance=matrix[i][j], duration=matrix[i][j])
+                # frm/to are Depot|Client; the mixed-list element type is object.
+                model.add_edge(frm, to, distance=matrix[i][j], duration=matrix[i][j])  # type: ignore[arg-type]
 
     result = model.solve(
         stop=MaxRuntime(time_limit_seconds),
@@ -121,8 +124,12 @@ def run_benchmark(
     # Force OR-Tools to visit every stop so the comparison is on equal terms.
     required = [replace(s, penalty=_REQUIRED_PENALTY) for s in stops]
     ort = solve(
-        depot_lat, depot_lon, required, vehicles,
-        travel_time_matrix=matrix, time_limit_seconds=time_limit_seconds,
+        depot_lat,
+        depot_lon,
+        required,
+        vehicles,
+        travel_time_matrix=matrix,
+        time_limit_seconds=time_limit_seconds,
     )
     ortools_bm = SolverBenchmark(
         solver="ortools",
@@ -139,8 +146,11 @@ def run_benchmark(
 
     logger.info(
         "Benchmark %d stops: ortools=%ds/%d routes pyvrp=%ds/%d routes",
-        len(stops), ortools_bm.total_route_seconds, ortools_bm.num_routes,
-        pyvrp_bm.total_route_seconds, pyvrp_bm.num_routes,
+        len(stops),
+        ortools_bm.total_route_seconds,
+        ortools_bm.num_routes,
+        pyvrp_bm.total_route_seconds,
+        pyvrp_bm.num_routes,
     )
     return BenchmarkResult(
         n_stops=len(stops),

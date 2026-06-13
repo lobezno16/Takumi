@@ -1,4 +1,5 @@
 """Pydantic schemas for TakumiRoute API — all use extra='forbid'."""
+
 from __future__ import annotations
 
 import uuid
@@ -20,8 +21,8 @@ from app.models.enums import (
     UserRole,
 )
 
-
 # ── Slots ──────────────────────────────────────────────────────────────
+
 
 class SlotResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -31,6 +32,7 @@ class SlotResponse(BaseModel):
 
 
 # ── Users ──────────────────────────────────────────────────────────────
+
 
 class UserCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -54,6 +56,7 @@ class UserResponse(BaseModel):
 
 # ── Depots ─────────────────────────────────────────────────────────────
 
+
 class DepotCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(max_length=200)
@@ -74,6 +77,7 @@ class DepotResponse(BaseModel):
 
 
 # ── Vehicles ───────────────────────────────────────────────────────────
+
 
 class VehicleCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -96,6 +100,7 @@ class VehicleResponse(BaseModel):
 
 # ── Stops ──────────────────────────────────────────────────────────────
 
+
 class StopCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     address: str = Field(max_length=500)
@@ -114,6 +119,7 @@ class StopResponse(BaseModel):
 
 
 # ── Orders ─────────────────────────────────────────────────────────────
+
 
 class OrderCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -139,6 +145,7 @@ class OrderStatusUpdate(BaseModel):
 
 
 # ── Simulation ─────────────────────────────────────────────────────────
+
 
 class SimulationRunCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -174,6 +181,7 @@ class SimulationRunResponse(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────────────
 
+
 class RouteResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
     id: uuid.UUID
@@ -197,6 +205,7 @@ class RouteStopResponse(BaseModel):
 
 
 # ── Agent ──────────────────────────────────────────────────────────────
+
 
 class AgentMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")

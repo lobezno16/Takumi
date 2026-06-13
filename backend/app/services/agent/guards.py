@@ -4,6 +4,7 @@ Security rationale (§13.10): the agent may only take *allowlisted* actions
 with *validated* arguments, and is rate-capped per order. Every side-effecting
 path goes through these checks. Anything off-allowlist is rejected and flagged.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -16,12 +17,14 @@ from app.models.enums import AgentAction, SlotCode
 
 # The only actions the agent may ever take. Kept as an explicit set so an
 # accidental new enum value cannot silently become executable.
-ALLOWED_ACTIONS: frozenset[AgentAction] = frozenset({
-    AgentAction.PROPOSE_WINDOW,
-    AgentAction.CONFIRM_DELIVERY,
-    AgentAction.REQUEST_REPLAN,
-    AgentAction.NO_ACTION,
-})
+ALLOWED_ACTIONS: frozenset[AgentAction] = frozenset(
+    {
+        AgentAction.PROPOSE_WINDOW,
+        AgentAction.CONFIRM_DELIVERY,
+        AgentAction.REQUEST_REPLAN,
+        AgentAction.NO_ACTION,
+    }
+)
 
 # Hard cap on agent actions per order to bound runaway/abusive interaction.
 MAX_ACTIONS_PER_ORDER = 8

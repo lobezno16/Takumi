@@ -1,4 +1,5 @@
 """API router for travel-time matrix and OSRM-related endpoints."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -54,9 +55,7 @@ async def compute_matrix(request: MatrixRequest) -> MatrixResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503, detail="OSRM service unavailable"
-        ) from exc
+        raise HTTPException(status_code=503, detail="OSRM service unavailable") from exc
 
     return MatrixResponse(
         durations=result.durations,

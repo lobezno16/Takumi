@@ -1,4 +1,5 @@
 """Auth API router — registration, login, token refresh, and current user."""
+
 from __future__ import annotations
 
 import jwt
@@ -29,7 +30,7 @@ class TokenResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     access_token: str
     refresh_token: str | None = None
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 — OAuth token type, not a secret
 
 
 class LoginRequest(BaseModel):

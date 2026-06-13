@@ -1,4 +1,5 @@
 """Redis caching service for TakumiRoute."""
+
 from __future__ import annotations
 
 import hashlib
@@ -16,9 +17,7 @@ async def get_redis() -> redis.Redis:
     """Get an async Redis client from the shared connection pool."""
     global _pool  # noqa: PLW0603
     if _pool is None:
-        _pool = redis.ConnectionPool.from_url(
-            settings.REDIS_URL, decode_responses=True
-        )
+        _pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
     return redis.Redis(connection_pool=_pool)
 
 

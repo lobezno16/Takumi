@@ -1,4 +1,5 @@
 """User model — authentication only, not tenancy."""
+
 from __future__ import annotations
 
 import uuid
@@ -14,9 +15,7 @@ from app.models.enums import UserRole
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sa.Uuid, primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(
         sa.String(320), unique=True, nullable=False, index=True
     )

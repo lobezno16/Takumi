@@ -5,6 +5,7 @@ password hashes are PII or secrets and must never reach logs or Sentry. A
 scrubbing processor runs on every structlog event and on stdlib log records
 routed through structlog, redacting sensitive keys before they are rendered.
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,20 +17,22 @@ from app.config import settings
 
 # Keys whose values are PII or secrets and must be redacted from every log
 # line and Sentry event. Matched case-insensitively.
-SENSITIVE_KEYS: frozenset[str] = frozenset({
-    "password",
-    "hashed_password",
-    "token",
-    "access_token",
-    "refresh_token",
-    "authorization",
-    "email",
-    "address",
-    "raw_message",
-    "location",
-    "secret",
-    "jwt_secret",
-})
+SENSITIVE_KEYS: frozenset[str] = frozenset(
+    {
+        "password",
+        "hashed_password",
+        "token",
+        "access_token",
+        "refresh_token",
+        "authorization",
+        "email",
+        "address",
+        "raw_message",
+        "location",
+        "secret",
+        "jwt_secret",
+    }
+)
 
 _REDACTED = "[REDACTED]"
 
@@ -46,9 +49,7 @@ def _scrub(value: Any) -> Any:
     return value
 
 
-def scrub_pii(
-    _logger: Any, _method: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def scrub_pii(_logger: Any, _method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """structlog processor: redact PII/secret keys from the event."""
     return _scrub(event_dict)
 
@@ -88,9 +89,7 @@ def configure_logging() -> None:
     root.setLevel(settings.LOG_LEVEL.upper())
 
 
-def _sentry_before_send(
-    event: dict[str, Any], _hint: dict[str, Any]
-) -> dict[str, Any]:
+def _sentry_before_send(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
     """Scrub PII from Sentry events before they leave the process."""
     return _scrub(event)
 
@@ -105,7 +104,7 @@ def init_sentry() -> None:
         dsn=settings.SENTRY_DSN,
         environment=settings.ENVIRONMENT,
         send_default_pii=False,  # never attach request bodies / headers
-        before_send=_sentry_before_send,
+        before_send=_sentry_before_send,  # type: ignore[arg-type]
         traces_sample_rate=0.1,
     )
 

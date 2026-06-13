@@ -1,4 +1,5 @@
 """Tests for Phase 10 — PyVRP vs OR-Tools benchmark."""
+
 from __future__ import annotations
 
 from app.services.optimizer.benchmark import run_benchmark
@@ -10,9 +11,14 @@ def _instance(n_stops: int, n_vehicles: int, seed: int = 7):
     synth = generate_stops(n_stops=n_stops, seed=seed)
     stops = [
         OptStop(
-            index=i, stop_id=s["id"], latitude=s["latitude"],
-            longitude=s["longitude"], demand=1, parcel_size="80",
-            floor=s.get("floor"), address_type=s["address_type"],
+            index=i,
+            stop_id=s["id"],
+            latitude=s["latitude"],
+            longitude=s["longitude"],
+            demand=1,
+            parcel_size="80",
+            floor=s.get("floor"),
+            address_type=s["address_type"],
         )
         for i, s in enumerate(synth)
     ]

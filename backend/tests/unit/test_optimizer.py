@@ -1,17 +1,18 @@
 """Tests for Phase 5 — OR-Tools VRPTW optimizer."""
+
 from __future__ import annotations
 
 from app.services.optimizer.solver import (
     OptStop,
     OptVehicle,
+    _compute_service_time,
+    _haversine_seconds,
     build_travel_time_matrix,
     solve,
-    _haversine_seconds,
-    _compute_service_time,
 )
 
-
 # ── Unit tests ────────────────────────────────────────────────────────
+
 
 async def test_haversine_seconds() -> None:
     """Haversine should return reasonable travel times for Tokyo distances."""
@@ -58,6 +59,7 @@ async def test_build_matrix_haversine() -> None:
 
 
 # ── Solver tests ──────────────────────────────────────────────────────
+
 
 async def test_solve_empty_inputs() -> None:
     """Empty stops or vehicles should return no_solution."""
@@ -144,14 +146,42 @@ async def test_solve_penalty_influences_selection() -> None:
     """Stops with higher penalties should be prioritized over low-penalty ones."""
     # 2 vehicles capacity=1 each, 4 stops — only 2 can be visited
     stops = [
-        OptStop(index=0, stop_id="high-1", latitude=35.673, longitude=139.818,
-                demand=1, penalty=9999, time_window_end=28800),
-        OptStop(index=1, stop_id="high-2", latitude=35.674, longitude=139.819,
-                demand=1, penalty=9998, time_window_end=28800),
-        OptStop(index=2, stop_id="low-1", latitude=35.675, longitude=139.820,
-                demand=1, penalty=100, time_window_end=28800),
-        OptStop(index=3, stop_id="low-2", latitude=35.676, longitude=139.821,
-                demand=1, penalty=101, time_window_end=28800),
+        OptStop(
+            index=0,
+            stop_id="high-1",
+            latitude=35.673,
+            longitude=139.818,
+            demand=1,
+            penalty=9999,
+            time_window_end=28800,
+        ),
+        OptStop(
+            index=1,
+            stop_id="high-2",
+            latitude=35.674,
+            longitude=139.819,
+            demand=1,
+            penalty=9998,
+            time_window_end=28800,
+        ),
+        OptStop(
+            index=2,
+            stop_id="low-1",
+            latitude=35.675,
+            longitude=139.820,
+            demand=1,
+            penalty=100,
+            time_window_end=28800,
+        ),
+        OptStop(
+            index=3,
+            stop_id="low-2",
+            latitude=35.676,
+            longitude=139.821,
+            demand=1,
+            penalty=101,
+            time_window_end=28800,
+        ),
     ]
     vehicles = [
         OptVehicle(index=0, vehicle_id="v-1", capacity=1),
@@ -160,9 +190,7 @@ async def test_solve_penalty_influences_selection() -> None:
 
     result = solve(35.672, 139.817, stops, vehicles, time_limit_seconds=5)
 
-    visited_ids = {
-        s.stop_id for r in result.routes for s in r.stops
-    }
+    visited_ids = {s.stop_id for r in result.routes for s in r.stops}
     # High-penalty stops should be visited, low ones skipped
     assert "high-1" in visited_ids
     assert "high-2" in visited_ids
@@ -171,8 +199,14 @@ async def test_solve_penalty_influences_selection() -> None:
 async def test_opt_result_has_timing() -> None:
     """Solution should report solver wall time."""
     stops = [
-        OptStop(index=0, stop_id="s1", latitude=35.675, longitude=139.820,
-                penalty=5000, time_window_end=28800),
+        OptStop(
+            index=0,
+            stop_id="s1",
+            latitude=35.675,
+            longitude=139.820,
+            penalty=5000,
+            time_window_end=28800,
+        ),
     ]
     vehicles = [OptVehicle(index=0, vehicle_id="v1", capacity=80)]
 
