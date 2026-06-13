@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.depots import router as depots_router
 from app.api.matrix import router as matrix_router
+from app.api.optimize import router as optimize_router
 from app.api.orders import router as orders_router
 from app.api.predictions import router as predictions_router
 from app.api.stops import router as stops_router
@@ -77,6 +78,7 @@ app.include_router(auth_router)
 app.include_router(depots_router)
 app.include_router(matrix_router)
 app.include_router(orders_router)
+app.include_router(optimize_router)
 app.include_router(predictions_router)
 app.include_router(stops_router)
 app.include_router(vehicles_router)
