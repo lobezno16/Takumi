@@ -54,3 +54,6 @@ logs/
 
 # Sentry
 .sentryclirc
+
+# Presentation (local only)
+presentation/
