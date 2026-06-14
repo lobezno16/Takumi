@@ -36,8 +36,8 @@ shell-frontend: ## Open a shell in the frontend container
 migrate: ## Run Alembic migrations
 	docker compose exec backend alembic upgrade head
 
-seed: ## Generate synthetic data and seed the database
-	docker compose exec backend python -m app.synthetic.generate $(if $(SEED),--seed $(SEED),)
+seed: ## Seed reference data (delivery time-slot windows)
+	docker compose exec backend python -m app.seed_slots
 
 # --- Testing ---
 .PHONY: test test-backend test-frontend
