@@ -103,12 +103,12 @@ export function confidence(prob: number): { label: string; pct: number; tone: To
   return { label: 'Low', pct, tone: 'danger' };
 }
 
-/** Deterministic friendly driver label from a vehicle id. */
+/** Stable, friendly driver label derived from a vehicle id. */
 export function driverLabel(vehicleId: string, index: number): string {
   return `Driver ${String.fromCharCode(65 + (index % 26))} · Unit ${vehicleId.replace(/[^0-9]/g, '') || index + 1}`;
 }
 
-/** Deterministic synthetic recipient + address for a stop (demo display only). */
+/** Stable synthetic recipient + address for a stop (demo display only). */
 const FAMILY = ['Sato', 'Suzuki', 'Takahashi', 'Tanaka', 'Watanabe', 'Ito', 'Yamamoto', 'Nakamura', 'Kobayashi', 'Kato'];
 
 export function recipientFor(stopId: string, sequence: number): string {
