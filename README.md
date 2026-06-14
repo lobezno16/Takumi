@@ -115,7 +115,7 @@ sequenceDiagram
     participant T as Tanaka-san (Operator)
     participant TR as TakumiRoute
     participant ML as ML Service
-    participant OPT as Optimizer
+    participant OE as Optimizer
     participant AG as Agent
     participant D as Yamamoto-san (Driver)
     participant R as Recipients
@@ -128,18 +128,18 @@ sequenceDiagram
     Note over ML: LightGBM scores every combination. Suzuki 92% home 2-4 PM. Ito 88% home 8-10 AM. Taniguchi 71% home 6-8 PM only.
 
     ML-->>TR: Calibrated p(i,s) for 42 x 3 slot combinations
-    TR->>OPT: Solve Prize-Collecting VRPTW
-    OPT-->>TR: Optimal routes + slot assignments
+    TR->>OE: Solve Prize-Collecting VRPTW
+    OE-->>TR: Optimal routes + slot assignments
 
-    Note over OPT: Retirees first (8-10 AM). Toyosu towers in afternoon. Ariake evening slots for office workers. 2 low-p stops deferred.
+    Note over OE: Retirees first (8-10 AM). Toyosu towers in afternoon. Ariake evening slots for office workers. 2 low-p stops deferred.
 
     TR->>D: Optimized route pushed to driver app
     D->>D: 8 AM — Route starts. Retirees and WFH first. 6/6 succeed.
 
     R->>AG: Sato-san texts — home after 6 PM today
     AG->>AG: Intent parser extracts SlotCode=EVENING
-    AG->>OPT: Re-optimize with evening constraint
-    OPT-->>D: Updated route via WebSocket
+    AG->>OE: Re-optimize with evening constraint
+    OE-->>D: Updated route via WebSocket
 
     Note over D: Phone buzzes — Stop #22 moved to 6:15 PM
 
