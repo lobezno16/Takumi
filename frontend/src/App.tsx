@@ -13,10 +13,10 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-  { id: 'simulation', label: 'Simulation', icon: '🧪' },
-  { id: 'map', label: 'Route Map', icon: '🗺️' },
-  { id: 'agent', label: 'Agent Console', icon: '💬' },
+  { id: 'dashboard', label: 'Operations', icon: '📊' },
+  { id: 'simulation', label: 'Plan Optimization', icon: '⚙️' },
+  { id: 'map', label: 'Live Map', icon: '🗺️' },
+  { id: 'agent', label: 'Customer Hub', icon: '💬' },
 ];
 
 function Sidebar() {

@@ -1,176 +1,185 @@
 import { useState, useMemo, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import Map, { Marker, Source, Layer, NavigationControl } from 'react-map-gl/maplibre';
+import type { LineLayerSpecification } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useRunDetailedSimulation } from '@/api/client';
-import type { DetailedSimulationResult, RouteDetail } from '@/api/client';
+import type { DetailedSimulationResult, RouteStopDetail } from '@/api/client';
 import { useAppStore } from '@/store/app';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import {
+  addressFor,
+  availabilityStatus,
+  confidence,
+  deriveOps,
+  driverLabel,
+  recipientFor,
+  slotWindow,
+  type Tone,
+} from '@/lib/ops';
+import { StatusBadge, PrimaryButton } from '@/components/ui';
 
-// Koto-ku bounding box (matches backend synthetic generator).
-const KOTO_BBOX = { latMin: 35.634, latMax: 35.694, lonMin: 139.792, lonMax: 139.832 };
+const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 
-const VIEW_W = 800;
-const VIEW_H = 600;
-const PAD = 40;
-
-// Per-vehicle route colors.
 const ROUTE_COLORS = [
-  '#6366f1', '#10b981', '#f59e0b', '#ef4444',
-  '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16',
+  '#6366f1', '#0ea5e9', '#10b981', '#f59e0b',
+  '#ec4899', '#8b5cf6', '#14b8a6', '#ef4444',
 ];
+
+const routeColor = (i: number): string => ROUTE_COLORS.at(i % ROUTE_COLORS.length) ?? '#6366f1';
+
+function toneHex(tone: Tone): string {
+  switch (tone) {
+    case 'success': return '#10b981';
+    case 'danger': return '#ef4444';
+    case 'info': return '#6366f1';
+    case 'warning': return '#f59e0b';
+    default: return '#94a3b8';
+  }
+}
 
 type Policy = 'baseline' | 'takumi';
 
-/** Project a (lat, lng) onto SVG pixel space using the ward bounding box. */
-function project(lat: number, lon: number): { x: number; y: number } {
-  const { latMin, latMax, lonMin, lonMax } = KOTO_BBOX;
-  const x = PAD + ((lon - lonMin) / (lonMax - lonMin)) * (VIEW_W - 2 * PAD);
-  // Latitude grows north → invert for screen-y.
-  const y = PAD + ((latMax - lat) / (latMax - latMin)) * (VIEW_H - 2 * PAD);
-  return { x, y };
+interface SelectedStop {
+  stop: RouteStopDetail;
+  driver: string;
+  color: string;
 }
 
-function MapLegend({ routes }: { routes: RouteDetail[] }) {
+const lineLayer: LineLayerSpecification = {
+  id: 'routes',
+  type: 'line',
+  source: 'routes',
+  layout: { 'line-cap': 'round', 'line-join': 'round' },
+  paint: {
+    'line-color': ['get', 'color'],
+    'line-width': 3,
+    'line-opacity': 0.65,
+  },
+};
+
+function DetailSidebar({ selection, onClose }: { selection: SelectedStop; onClose: () => void }) {
+  const { stop, driver, color } = selection;
+  const status = availabilityStatus(stop.predicted_prob);
+  const conf = confidence(stop.predicted_prob);
   return (
-    <div className="absolute top-4 right-4 bg-surface-light/95 backdrop-blur-sm rounded-xl border border-surface-lighter p-4 shadow-xl max-w-xs">
-      <h4 className="text-xs font-semibold text-text-primary mb-3">Vehicles</h4>
-      <div className="space-y-2">
-        {routes.map((route, i) => (
-          <div key={route.vehicle_id} className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: ROUTE_COLORS[i % ROUTE_COLORS.length] }}
-            />
-            <span className="text-xs text-text-primary font-medium">{route.vehicle_id}</span>
-            <span className="text-[10px] text-text-secondary ml-auto">
-              {route.stops.length} stops · {route.duration_min}min
-            </span>
-          </div>
-        ))}
+    <div className="absolute right-3 top-3 bottom-3 z-10 w-80 overflow-y-auto rounded-2xl border border-surface-lighter bg-surface-light/95 shadow-2xl backdrop-blur">
+      <div className="flex items-start justify-between border-b border-surface-lighter p-4">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-text-secondary">Delivery stop</p>
+          <h4 className="mt-0.5 text-base font-semibold text-text-primary">
+            {recipientFor(stop.stop_id, stop.sequence)}
+          </h4>
+        </div>
+        <button onClick={onClose} className="text-text-secondary hover:text-text-primary" aria-label="Close">✕</button>
       </div>
-      <div className="mt-3 pt-3 border-t border-surface-lighter flex items-center gap-4 text-[10px]">
-        <span className="flex items-center gap-1.5 text-text-secondary">
-          <span className="w-2.5 h-2.5 rounded-full bg-success" /> Delivered
-        </span>
-        <span className="flex items-center gap-1.5 text-text-secondary">
-          <span className="w-2.5 h-2.5 rounded-full bg-danger" /> Missed
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function RouteLayer({
-  routes,
-  depot,
-}: {
-  routes: RouteDetail[];
-  depot: { x: number; y: number };
-}) {
-  const [hovered, setHovered] = useState<string | null>(null);
-
-  return (
-    <>
-      {routes.map((route, ri) => {
-        const color = ROUTE_COLORS[ri % ROUTE_COLORS.length];
-        const placed = route.stops.map((stop) => ({ stop, ...project(stop.latitude, stop.longitude) }));
-        // depot → stops → depot as one polyline (avoids per-leg index access).
-        const path = [depot, ...placed, depot].map((p) => `${p.x},${p.y}`).join(' ');
-        return (
-          <g key={route.vehicle_id}>
-            <polyline points={path} fill="none" stroke={color} strokeWidth="2" strokeOpacity="0.55" />
-            {placed.map(({ stop, x, y }) => {
-              const isHovered = hovered === stop.stop_id;
-              const fill = stop.outcome === 'success' ? '#10b981' : '#ef4444';
-              return (
-                <g
-                  key={stop.stop_id}
-                  transform={`translate(${x}, ${y})`}
-                  onMouseEnter={() => setHovered(stop.stop_id)}
-                  onMouseLeave={() => setHovered(null)}
-                  className="cursor-pointer"
-                >
-                  <circle
-                    r={isHovered ? 8 : 5} fill={fill}
-                    stroke="white" strokeWidth="1.5"
-                    className="transition-all duration-150"
-                  />
-                  {isHovered && (
-                    <g transform="translate(10, -10)">
-                      <rect x="-2" y="-22" width="146" height="42" rx="4" fill="#1e293b" stroke="#334155" />
-                      <text y="-9" className="fill-text-primary" style={{ fontSize: '9px' }}>
-                        Stop {stop.sequence + 1} · {stop.assigned_slot} · {stop.arrival_min}min
-                      </text>
-                      <text y="3" className="fill-text-secondary" style={{ fontSize: '8px' }}>
-                        P(home) = {(stop.predicted_prob * 100).toFixed(0)}%
-                      </text>
-                      <text
-                        y="14"
-                        style={{ fontSize: '8px', fontWeight: 600 }}
-                        className={stop.outcome === 'success' ? 'fill-success' : 'fill-danger'}
-                      >
-                        {stop.outcome === 'success' ? '✓ Delivered first attempt' : '✗ Redelivery needed'}
-                      </text>
-                    </g>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        );
-      })}
-    </>
-  );
-}
-
-function MapCanvas({ result, policy }: { result: DetailedSimulationResult; policy: Policy }) {
-  const routes = policy === 'takumi' ? result.takumi_routes : result.baseline_routes;
-  const depot = project(result.depot_lat, result.depot_lon);
-  const kpis = policy === 'takumi' ? result.takumi : result.baseline;
-
-  return (
-    <div className="relative bg-surface-light rounded-2xl border border-surface-lighter overflow-hidden" style={{ height: '600px' }}>
-      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="w-full h-full">
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" strokeWidth="0.5" />
-          </pattern>
-        </defs>
-        <rect width={VIEW_W} height={VIEW_H} fill="#0f172a" />
-        <rect width={VIEW_W} height={VIEW_H} fill="url(#grid)" />
-        <text x={VIEW_W / 2} y={24} textAnchor="middle" className="fill-text-secondary" style={{ fontSize: '11px' }}>
-          Kōtō-ku, Tokyo — {result.n_stops} stops · {routes.length} vehicles ·{' '}
-          {policy === 'takumi' ? 'per-recipient slots' : `baseline window: ${result.slot_code}`}
-        </text>
-
-        <RouteLayer routes={routes} depot={depot} />
-
-        {/* depot marker on top */}
-        <g transform={`translate(${depot.x}, ${depot.y})`}>
-          <rect x="-8" y="-8" width="16" height="16" rx="3" fill="#6366f1" stroke="white" strokeWidth="2" />
-          <text y="24" textAnchor="middle" className="fill-text-secondary" style={{ fontSize: '10px' }}>Depot</text>
-        </g>
-      </svg>
-
-      <MapLegend routes={routes} />
-
-      <div className="absolute bottom-4 left-4 bg-surface-light/95 backdrop-blur-sm rounded-xl border border-surface-lighter p-4 shadow-xl">
-        <div className="grid grid-cols-3 gap-5 text-center">
-          <div>
-            <div className="text-lg font-bold text-success">
-              {(kpis.first_attempt_success_rate * 100).toFixed(0)}%
+      <div className="space-y-4 p-4">
+        <Field label="Address">{addressFor(stop.latitude, stop.longitude)}</Field>
+        <Field label="Delivery window">{slotWindow(stop.assigned_slot)}</Field>
+        <Field label="Planned arrival">~{Math.floor(stop.arrival_min / 60) + 8}:{String(stop.arrival_min % 60).padStart(2, '0')} (stop {stop.sequence + 1})</Field>
+        <div>
+          <p className="mb-1 text-[11px] uppercase tracking-wide text-text-secondary">Availability status</p>
+          <StatusBadge label={status.label} tone={status.tone} />
+        </div>
+        <div>
+          <p className="mb-1 text-[11px] uppercase tracking-wide text-text-secondary">Delivery confidence</p>
+          <div className="flex items-center gap-2">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-lighter">
+              <div className="h-full rounded-full" style={{ width: `${conf.pct}%`, backgroundColor: toneHex(conf.tone) }} />
             </div>
-            <div className="text-[10px] text-text-secondary">First-Attempt</div>
+            <span className="text-sm font-semibold text-text-primary">{conf.label} ({conf.pct}%)</span>
           </div>
-          <div>
-            <div className="text-lg font-bold text-danger">{kpis.deliveries_failed}</div>
-            <div className="text-[10px] text-text-secondary">Redeliveries</div>
-          </div>
-          <div>
-            <div className="text-lg font-bold text-warning">¥{kpis.cost_estimate.toFixed(0)}</div>
-            <div className="text-[10px] text-text-secondary">Est. Cost</div>
-          </div>
+        </div>
+        <Field label="Assigned to">
+          <span className="inline-flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+            {driver}
+          </span>
+        </Field>
+        <div className="rounded-lg border border-surface-lighter bg-surface p-3 text-xs text-text-secondary">
+          {stop.outcome === 'success'
+            ? 'Projected: delivered on first attempt — no redelivery expected.'
+            : 'Projected: recipient likely out — flagged for a window adjustment via the Communication Hub.'}
         </div>
       </div>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-0.5 text-[11px] uppercase tracking-wide text-text-secondary">{label}</p>
+      <p className="text-sm text-text-primary">{children}</p>
+    </div>
+  );
+}
+
+function PlanMap({ result, policy, onSelect }: { result: DetailedSimulationResult; policy: Policy; onSelect: (s: SelectedStop | null) => void }) {
+  const routes = policy === 'takumi' ? result.takumi_routes : result.baseline_routes;
+
+  const routeGeoJSON = useMemo(
+    () => ({
+      type: 'FeatureCollection' as const,
+      features: routes.map((r, i) => ({
+        type: 'Feature' as const,
+        properties: { color: routeColor(i) },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: [
+            [result.depot_lon, result.depot_lat],
+            ...r.stops.map((s) => [s.longitude, s.latitude]),
+            [result.depot_lon, result.depot_lat],
+          ],
+        },
+      })),
+    }),
+    [routes, result.depot_lon, result.depot_lat],
+  );
+
+  return (
+    <Map
+      initialViewState={{ longitude: result.depot_lon, latitude: result.depot_lat, zoom: 12.4 }}
+      mapStyle={MAP_STYLE}
+      style={{ width: '100%', height: '100%' }}
+      onClick={() => onSelect(null)}
+    >
+      <NavigationControl position="bottom-right" showCompass={false} />
+      <Source id="routes" type="geojson" data={routeGeoJSON}>
+        <Layer {...lineLayer} />
+      </Source>
+
+      {/* Depot */}
+      <Marker longitude={result.depot_lon} latitude={result.depot_lat} anchor="center">
+        <div className="flex flex-col items-center">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white shadow-lg ring-2 ring-white">🏬</div>
+        </div>
+      </Marker>
+
+      {routes.map((route, ri) =>
+        route.stops.map((stop) => {
+          const tone = availabilityStatus(stop.predicted_prob).tone;
+          return (
+            <Marker
+              key={stop.stop_id}
+              longitude={stop.longitude}
+              latitude={stop.latitude}
+              anchor="center"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                onSelect({ stop, driver: driverLabel(route.vehicle_id, ri), color: routeColor(ri) });
+              }}
+            >
+              <div
+                className="h-3.5 w-3.5 cursor-pointer rounded-full ring-2 ring-white transition-transform hover:scale-150"
+                style={{ backgroundColor: toneHex(tone) }}
+                title={`Stop ${stop.sequence + 1}`}
+              />
+            </Marker>
+          );
+        }),
+      )}
+    </Map>
   );
 }
 
@@ -178,88 +187,108 @@ export function MapPage() {
   const { lastDetailed, setLastDetailed } = useAppStore();
   const simMutation = useRunDetailedSimulation();
   const [policy, setPolicy] = useState<Policy>('takumi');
+  const [selected, setSelected] = useState<SelectedStop | null>(null);
   const { isConnected } = useWebSocket('/ws/live');
 
   const handleRun = useCallback(() => {
+    setSelected(null);
     simMutation.mutate(
-      { n_stops: 40, n_vehicles: 4, slot_code: 'am', day_of_week: 2 },
+      { n_stops: 44, n_vehicles: 5, slot_code: 'am', day_of_week: 2 },
       { onSuccess: (data) => setLastDetailed(data) },
     );
   }, [simMutation, setLastDetailed]);
 
-  const redeliverySaved = useMemo(() => {
-    if (!lastDetailed) return 0;
-    return lastDetailed.baseline.deliveries_failed - lastDetailed.takumi.deliveries_failed;
-  }, [lastDetailed]);
+  const ops = useMemo(
+    () => (lastDetailed ? deriveOps(lastDetailed.baseline, lastDetailed.takumi, lastDetailed.n_vehicles) : null),
+    [lastDetailed],
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-text-primary">Route Map</h2>
-          <p className="mt-1 text-text-secondary">Optimized delivery routes in Kōtō-ku, colored by first-attempt outcome</p>
+          <h2 className="text-2xl font-bold text-text-primary">Live Route Map</h2>
+          <p className="mt-0.5 text-sm text-text-secondary">Kōtō-ku, Tokyo — delivery stops by availability status</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-[11px] text-text-secondary">
-            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-success' : 'bg-text-secondary/40'}`} />
-            {isConnected ? 'Live' : 'Offline'}
+            <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-success' : 'bg-text-secondary/40'}`} />
+            {isConnected ? 'Live sync' : 'Offline'}
           </span>
-          <button
-            onClick={handleRun}
-            disabled={simMutation.isPending}
-            className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-medium shadow-lg shadow-primary/25 hover:shadow-xl transition-all disabled:opacity-50"
-          >
-            {simMutation.isPending ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Optimizing…
-              </span>
-            ) : 'Generate Routes'}
-          </button>
+          <PrimaryButton onClick={handleRun} loading={simMutation.isPending}>
+            {simMutation.isPending ? 'Optimizing…' : lastDetailed ? 'Re-plan Routes' : 'Generate Plan'}
+          </PrimaryButton>
         </div>
       </div>
 
-      {lastDetailed && (
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1 p-1 rounded-lg bg-surface-light border border-surface-lighter">
+      {lastDetailed && ops && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 rounded-lg border border-surface-lighter bg-surface-light p-1">
             {(['baseline', 'takumi'] as const).map((p) => (
               <button
                 key={p}
-                onClick={() => setPolicy(p)}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  policy === p ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'
-                }`}
+                onClick={() => { setPolicy(p); setSelected(null); }}
+                className={`rounded-md px-4 py-1.5 text-sm font-medium transition-all ${policy === p ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
               >
-                {p === 'baseline' ? 'Baseline (FIFO)' : 'Takumi (ML-optimized)'}
+                {p === 'baseline' ? 'Current Plan' : 'Optimized Plan'}
               </button>
             ))}
           </div>
-          {redeliverySaved > 0 && (
-            <div className="px-3 py-1.5 rounded-lg bg-success/10 text-success border border-success/20 text-sm font-medium">
-              {redeliverySaved} fewer redeliveries vs baseline
-            </div>
+          <Pill label="Stops" value={`${ops.stopsPlanned}`} />
+          <Pill label="Drivers" value={`${ops.fleetUsed}/${ops.fleetTotal}`} />
+          <Pill label="First-attempt success" value={`${ops.firstAttemptPct.toFixed(0)}%`} tone="success" />
+          {ops.redeliveriesPrevented > 0 && (
+            <Pill label="Redeliveries prevented" value={`${ops.redeliveriesPrevented}`} tone="success" />
           )}
         </div>
       )}
 
-      {!lastDetailed ? (
-        <div
-          className="relative bg-surface-light rounded-2xl border border-surface-lighter flex flex-col items-center justify-center text-text-secondary"
-          style={{ height: '600px' }}
-        >
-          <div className="text-5xl mb-4">🗺️</div>
-          <p className="text-lg font-medium">No routes to display</p>
-          <p className="text-sm mt-1">Generate routes to visualize the optimized delivery day</p>
-        </div>
-      ) : (
-        <MapCanvas result={lastDetailed} policy={policy} />
-      )}
+      <div className="relative overflow-hidden rounded-2xl border border-surface-lighter bg-surface-light" style={{ height: 620 }}>
+        {!lastDetailed ? (
+          <div className="flex h-full flex-col items-center justify-center text-text-secondary">
+            <div className="mb-4 text-5xl">🗺️</div>
+            <p className="text-lg font-medium text-text-primary">No active route plan</p>
+            <p className="mt-1 text-sm">Generate a plan to see today's delivery map and stop-level status.</p>
+          </div>
+        ) : (
+          <>
+            <PlanMap result={lastDetailed} policy={policy} onSelect={setSelected} />
+            {selected && <DetailSidebar selection={selected} onClose={() => setSelected(null)} />}
+            <MapLegend />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {simMutation.error && (
-        <div className="px-4 py-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
-          {simMutation.error.message}
-        </div>
-      )}
+function Pill({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: Tone }) {
+  const accent = tone === 'success' ? 'text-success' : 'text-text-primary';
+  return (
+    <div className="rounded-lg border border-surface-lighter bg-surface-light px-3 py-1.5">
+      <span className="text-[11px] text-text-secondary">{label}</span>{' '}
+      <span className={`text-sm font-semibold ${accent}`}>{value}</span>
+    </div>
+  );
+}
+
+function MapLegend() {
+  const items: { label: string; tone: Tone }[] = [
+    { label: 'Confirmed / likely available', tone: 'success' },
+    { label: 'Scheduled', tone: 'info' },
+    { label: 'High absence risk', tone: 'danger' },
+  ];
+  return (
+    <div className="absolute left-3 bottom-3 z-10 rounded-xl border border-surface-lighter bg-surface-light/95 p-3 shadow-xl backdrop-blur">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Stop status</p>
+      <div className="space-y-1.5">
+        {items.map((it) => (
+          <div key={it.label} className="flex items-center gap-2 text-xs text-text-primary">
+            <span className="h-2.5 w-2.5 rounded-full ring-1 ring-white" style={{ backgroundColor: toneHex(it.tone) }} />
+            {it.label}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
