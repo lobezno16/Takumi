@@ -4,7 +4,7 @@ import Map, { Marker, Source, Layer, NavigationControl } from 'react-map-gl/mapl
 import type { LineLayerSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useRunDetailedSimulation } from '@/api/client';
-import type { DetailedSimulationResult, RouteStopDetail } from '@/api/client';
+import type { DetailedSimulationResult, RouteDetail, RouteStopDetail } from '@/api/client';
 import { useAppStore } from '@/store/app';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import {
@@ -44,6 +44,8 @@ interface SelectedStop {
   stop: RouteStopDetail;
   driver: string;
   color: string;
+  order: number;
+  total: number;
 }
 
 const lineLayer: LineLayerSpecification = {
@@ -58,9 +60,11 @@ const lineLayer: LineLayerSpecification = {
   },
 };
 
-// Public OSRM routing service — token-free; snaps a sequence of waypoints to
-// the real road network. Falls back to straight segments if unavailable.
-const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
+// Public OSRM routing service (token-free). The trip service reorders a
+// vehicle's stops into a road-optimal loop and returns on-road geometry plus
+// snapped stop positions. Falls back to straight segments in the original
+// order when routing is unavailable, so the map always works offline.
+const OSRM_TRIP = 'https://router.project-osrm.org/trip/v1/driving';
 
 type RouteFeature = {
   type: 'Feature';
@@ -69,24 +73,79 @@ type RouteFeature = {
 };
 type RouteFC = { type: 'FeatureCollection'; features: RouteFeature[] };
 
+interface PlacedStop {
+  stop: RouteStopDetail;
+  lon: number; // snapped-to-road position
+  lat: number;
+  order: number; // 1-based visiting order
+}
+interface RenderedRoute {
+  vehicleId: string;
+  colorIndex: number;
+  geometry: number[][];
+  stops: PlacedStop[];
+}
+
 function lineFeature(coordinates: number[][], color: string): RouteFeature {
   return { type: 'Feature', properties: { color }, geometry: { type: 'LineString', coordinates } };
 }
 
-async function snapToRoads(waypoints: number[][]): Promise<number[][]> {
-  const path = waypoints.map((c) => `${c[0]},${c[1]}`).join(';');
-  const res = await fetch(`${OSRM_BASE}/${path}?overview=full&geometries=geojson`);
+function toFC(rendered: RenderedRoute[]): RouteFC {
+  return {
+    type: 'FeatureCollection',
+    features: rendered.map((r) => lineFeature(r.geometry, routeColor(r.colorIndex))),
+  };
+}
+
+/** Straight-segment fallback in the backend's original order. */
+function straightRoute(
+  route: RouteDetail, depotLon: number, depotLat: number, colorIndex: number,
+): RenderedRoute {
+  return {
+    vehicleId: route.vehicle_id,
+    colorIndex,
+    geometry: [
+      [depotLon, depotLat],
+      ...route.stops.map((s) => [s.longitude, s.latitude]),
+      [depotLon, depotLat],
+    ],
+    stops: route.stops.map((s, i) => ({ stop: s, lon: s.longitude, lat: s.latitude, order: i + 1 })),
+  };
+}
+
+/** Road-optimal loop via OSRM trip: optimized order + snapped stop positions. */
+async function planRoute(
+  route: RouteDetail, depotLon: number, depotLat: number, colorIndex: number,
+): Promise<RenderedRoute> {
+  const coords = [[depotLon, depotLat], ...route.stops.map((s) => [s.longitude, s.latitude])];
+  const path = coords.map((c) => `${c[0]},${c[1]}`).join(';');
+  const res = await fetch(
+    `${OSRM_TRIP}/${path}?source=first&roundtrip=true&overview=full&geometries=geojson`,
+  );
   if (!res.ok) throw new Error('routing unavailable');
   const data = (await res.json()) as {
-    routes?: { geometry?: { coordinates: number[][] } }[];
+    trips?: { geometry?: { coordinates: number[][] } }[];
+    waypoints?: { waypoint_index: number; location: number[] }[];
   };
-  const coords = data.routes?.[0]?.geometry?.coordinates;
-  if (!coords || coords.length === 0) throw new Error('no geometry');
-  return coords;
+  const geometry = data.trips?.[0]?.geometry?.coordinates;
+  const waypoints = data.waypoints;
+  if (!geometry || !waypoints || waypoints.length !== coords.length) {
+    throw new Error('no geometry');
+  }
+  const placed: PlacedStop[] = route.stops
+    .map((s, i) => {
+      const wp = waypoints.at(i + 1);
+      const lon = wp?.location?.[0] ?? s.longitude;
+      const lat = wp?.location?.[1] ?? s.latitude;
+      return { stop: s, lon, lat, order: wp?.waypoint_index ?? i + 1 };
+    })
+    .sort((a, b) => a.order - b.order)
+    .map((p, idx) => ({ ...p, order: idx + 1 }));
+  return { vehicleId: route.vehicle_id, colorIndex, geometry, stops: placed };
 }
 
 function DetailSidebar({ selection, onClose }: { selection: SelectedStop; onClose: () => void }) {
-  const { stop, driver, color } = selection;
+  const { stop, driver, color, order, total } = selection;
   const status = availabilityStatus(stop.predicted_prob);
   const conf = confidence(stop.predicted_prob);
   return (
@@ -95,7 +154,7 @@ function DetailSidebar({ selection, onClose }: { selection: SelectedStop; onClos
         <div>
           <p className="text-[11px] uppercase tracking-wide text-text-secondary">Delivery stop</p>
           <h4 className="mt-0.5 text-base font-semibold text-text-primary">
-            {recipientFor(stop.stop_id, stop.sequence)}
+            {recipientFor(stop.stop_id, order - 1)}
           </h4>
         </div>
         <button onClick={onClose} className="text-text-secondary hover:text-text-primary" aria-label="Close">✕</button>
@@ -103,7 +162,7 @@ function DetailSidebar({ selection, onClose }: { selection: SelectedStop; onClos
       <div className="space-y-4 p-4">
         <Field label="Address">{addressFor(stop.latitude, stop.longitude)}</Field>
         <Field label="Delivery window">{slotWindow(stop.assigned_slot)}</Field>
-        <Field label="Planned arrival">~{Math.floor(stop.arrival_min / 60) + 8}:{String(stop.arrival_min % 60).padStart(2, '0')} (stop {stop.sequence + 1})</Field>
+        <Field label="Route position">Stop {order} of {total}</Field>
         <div>
           <p className="mb-1 text-[11px] uppercase tracking-wide text-text-secondary">Availability status</p>
           <StatusBadge label={status.label} tone={status.tone} />
@@ -146,52 +205,36 @@ function PlanMap({ result, policy, onSelect }: { result: DetailedSimulationResul
   const routes = policy === 'takumi' ? result.takumi_routes : result.baseline_routes;
   const { depot_lon, depot_lat } = result;
 
-  // Straight segments render instantly; road-snapped geometry replaces them
-  // once OSRM responds (with a graceful fallback to the straight lines).
-  const straightFC = useMemo<RouteFC>(
-    () => ({
-      type: 'FeatureCollection',
-      features: routes.map((r, i) =>
-        lineFeature(
-          [
-            [depot_lon, depot_lat],
-            ...r.stops.map((s) => [s.longitude, s.latitude]),
-            [depot_lon, depot_lat],
-          ],
-          routeColor(i),
-        ),
-      ),
-    }),
+  // Straight, original-order routes render instantly; OSRM then replaces them
+  // with road-optimized loops + snapped stop positions (graceful fallback).
+  const straight = useMemo(
+    () => routes.map((r, i) => straightRoute(r, depot_lon, depot_lat, i)),
     [routes, depot_lon, depot_lat],
   );
 
-  const [roadFC, setRoadFC] = useState<RouteFC | null>(null);
+  const [optimized, setOptimized] = useState<RenderedRoute[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    setRoadFC(null);
+    setOptimized(null);
     void (async () => {
-      const features = await Promise.all(
+      const planned = await Promise.all(
         routes.map(async (r, i) => {
-          const waypoints = [
-            [depot_lon, depot_lat],
-            ...r.stops.map((s) => [s.longitude, s.latitude]),
-            [depot_lon, depot_lat],
-          ];
           try {
-            return lineFeature(await snapToRoads(waypoints), routeColor(i));
+            return await planRoute(r, depot_lon, depot_lat, i);
           } catch {
-            return lineFeature(waypoints, routeColor(i));
+            return straightRoute(r, depot_lon, depot_lat, i);
           }
         }),
       );
-      if (!cancelled) setRoadFC({ type: 'FeatureCollection', features });
+      if (!cancelled) setOptimized(planned);
     })();
     return () => {
       cancelled = true;
     };
   }, [routes, depot_lon, depot_lat]);
 
-  const routeGeoJSON = roadFC ?? straightFC;
+  const display = optimized ?? straight;
+  const routeGeoJSON = useMemo(() => toFC(display), [display]);
 
   return (
     <Map
@@ -206,30 +249,34 @@ function PlanMap({ result, policy, onSelect }: { result: DetailedSimulationResul
       </Source>
 
       {/* Depot */}
-      <Marker longitude={result.depot_lon} latitude={result.depot_lat} anchor="center">
-        <div className="flex flex-col items-center">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white shadow-lg ring-2 ring-white">🏬</div>
-        </div>
+      <Marker longitude={depot_lon} latitude={depot_lat} anchor="center">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white shadow-lg ring-2 ring-white">🏬</div>
       </Marker>
 
-      {routes.map((route, ri) =>
-        route.stops.map((stop) => {
-          const tone = availabilityStatus(stop.predicted_prob).tone;
+      {display.map((route) =>
+        route.stops.map((p) => {
+          const tone = availabilityStatus(p.stop.predicted_prob).tone;
           return (
             <Marker
-              key={stop.stop_id}
-              longitude={stop.longitude}
-              latitude={stop.latitude}
+              key={p.stop.stop_id}
+              longitude={p.lon}
+              latitude={p.lat}
               anchor="center"
               onClick={(e) => {
                 e.originalEvent.stopPropagation();
-                onSelect({ stop, driver: driverLabel(route.vehicle_id, ri), color: routeColor(ri) });
+                onSelect({
+                  stop: p.stop,
+                  driver: driverLabel(route.vehicleId, route.colorIndex),
+                  color: routeColor(route.colorIndex),
+                  order: p.order,
+                  total: route.stops.length,
+                });
               }}
             >
               <div
                 className="h-3.5 w-3.5 cursor-pointer rounded-full ring-2 ring-white transition-transform hover:scale-150"
                 style={{ backgroundColor: toneHex(tone) }}
-                title={`Stop ${stop.sequence + 1}`}
+                title={`Stop ${p.order}`}
               />
             </Marker>
           );
