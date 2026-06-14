@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import Map, { Marker, Source, Layer, NavigationControl } from 'react-map-gl/maplibre';
 import type { LineLayerSpecification } from 'maplibre-gl';
@@ -54,9 +54,36 @@ const lineLayer: LineLayerSpecification = {
   paint: {
     'line-color': ['get', 'color'],
     'line-width': 3,
-    'line-opacity': 0.65,
+    'line-opacity': 0.7,
   },
 };
+
+// Public OSRM routing service — token-free; snaps a sequence of waypoints to
+// the real road network. Falls back to straight segments if unavailable.
+const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
+
+type RouteFeature = {
+  type: 'Feature';
+  properties: { color: string };
+  geometry: { type: 'LineString'; coordinates: number[][] };
+};
+type RouteFC = { type: 'FeatureCollection'; features: RouteFeature[] };
+
+function lineFeature(coordinates: number[][], color: string): RouteFeature {
+  return { type: 'Feature', properties: { color }, geometry: { type: 'LineString', coordinates } };
+}
+
+async function snapToRoads(waypoints: number[][]): Promise<number[][]> {
+  const path = waypoints.map((c) => `${c[0]},${c[1]}`).join(';');
+  const res = await fetch(`${OSRM_BASE}/${path}?overview=full&geometries=geojson`);
+  if (!res.ok) throw new Error('routing unavailable');
+  const data = (await res.json()) as {
+    routes?: { geometry?: { coordinates: number[][] } }[];
+  };
+  const coords = data.routes?.[0]?.geometry?.coordinates;
+  if (!coords || coords.length === 0) throw new Error('no geometry');
+  return coords;
+}
 
 function DetailSidebar({ selection, onClose }: { selection: SelectedStop; onClose: () => void }) {
   const { stop, driver, color } = selection;
@@ -117,29 +144,58 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function PlanMap({ result, policy, onSelect }: { result: DetailedSimulationResult; policy: Policy; onSelect: (s: SelectedStop | null) => void }) {
   const routes = policy === 'takumi' ? result.takumi_routes : result.baseline_routes;
+  const { depot_lon, depot_lat } = result;
 
-  const routeGeoJSON = useMemo(
+  // Straight segments render instantly; road-snapped geometry replaces them
+  // once OSRM responds (with a graceful fallback to the straight lines).
+  const straightFC = useMemo<RouteFC>(
     () => ({
-      type: 'FeatureCollection' as const,
-      features: routes.map((r, i) => ({
-        type: 'Feature' as const,
-        properties: { color: routeColor(i) },
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: [
-            [result.depot_lon, result.depot_lat],
+      type: 'FeatureCollection',
+      features: routes.map((r, i) =>
+        lineFeature(
+          [
+            [depot_lon, depot_lat],
             ...r.stops.map((s) => [s.longitude, s.latitude]),
-            [result.depot_lon, result.depot_lat],
+            [depot_lon, depot_lat],
           ],
-        },
-      })),
+          routeColor(i),
+        ),
+      ),
     }),
-    [routes, result.depot_lon, result.depot_lat],
+    [routes, depot_lon, depot_lat],
   );
+
+  const [roadFC, setRoadFC] = useState<RouteFC | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setRoadFC(null);
+    void (async () => {
+      const features = await Promise.all(
+        routes.map(async (r, i) => {
+          const waypoints = [
+            [depot_lon, depot_lat],
+            ...r.stops.map((s) => [s.longitude, s.latitude]),
+            [depot_lon, depot_lat],
+          ];
+          try {
+            return lineFeature(await snapToRoads(waypoints), routeColor(i));
+          } catch {
+            return lineFeature(waypoints, routeColor(i));
+          }
+        }),
+      );
+      if (!cancelled) setRoadFC({ type: 'FeatureCollection', features });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [routes, depot_lon, depot_lat]);
+
+  const routeGeoJSON = roadFC ?? straightFC;
 
   return (
     <Map
-      initialViewState={{ longitude: result.depot_lon, latitude: result.depot_lat, zoom: 12.4 }}
+      initialViewState={{ longitude: depot_lon, latitude: depot_lat, zoom: 12.4 }}
       mapStyle={MAP_STYLE}
       style={{ width: '100%', height: '100%' }}
       onClick={() => onSelect(null)}
