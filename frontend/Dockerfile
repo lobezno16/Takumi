@@ -1,8 +1,10 @@
 # ---- Dev stage ----
 FROM node:22-alpine AS dev
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install
+# Deterministic installs from the committed lockfile so every clone/build
+# resolves identical dependency versions (incl. the map libraries).
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
