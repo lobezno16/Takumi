@@ -11,6 +11,9 @@ export default defineConfig({
     },
   },
   server: {
+    // Poll the filesystem so hot-reload works through Docker bind mounts on
+    // Windows/macOS, where native file-change events are not propagated.
+    watch: { usePolling: true, interval: 300 },
     // In Docker the backend is reachable by service name; for host-based dev
     // set VITE_PROXY_TARGET=http://localhost:8000.
     proxy: (() => {
