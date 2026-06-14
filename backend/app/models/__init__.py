@@ -21,6 +21,7 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.order import Order
+from app.models.organization import Organization
 from app.models.route import Route
 from app.models.route_stop import RouteStop
 from app.models.simulation_run import SimulationRun
@@ -39,6 +40,7 @@ __all__ = [
     "Depot",
     "Order",
     "OrderStatus",
+    "Organization",
     "ParcelSize",
     "Route",
     "RoutePolicy",

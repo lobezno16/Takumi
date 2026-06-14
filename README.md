@@ -170,6 +170,16 @@ make security      # Run security scans
 make logs          # Tail service logs
 ```
 
+## Multi-Tenancy
+
+The platform is **multi-tenant**: each registration provisions its own
+`Organization`, and every tenant-owned row (depots, vehicles, stops, orders,
+and agent interactions) carries an `organization_id`. All queries are scoped
+to the caller's organization, so one carrier can never read or act on
+another's data — a cross-tenant read is indistinguishable from a missing
+record. Tenant isolation is enforced at the persistence layer and proven by
+`tests/security/test_tenant_isolation.py`.
+
 ## Security
 
 See the dedicated security section in [SECURITY.md](./SECURITY.md) (added in Phase 11).
@@ -182,7 +192,7 @@ See the dedicated security section in [SECURITY.md](./SECURITY.md) (added in Pha
 
 - **Kubernetes** orchestration with horizontal pod autoscaling
 - **Multi-region** deployment with CockroachDB or Neon managed PostgreSQL
-- **Multi-tenancy** with RBAC, tenant isolation, org/billing models, and audit at scale
+- **Tenant features at scale** on top of the built-in multi-tenancy: org billing, SSO/SCIM, cross-org analytics, and per-tenant audit retention
 - **cuOpt GPU path** for large-scale route optimization
 - **TMS/carrier API integrations** (Delhivery, Sagawa, Yamato)
 - **Modal shift to rail** for long-haul segments

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_db
 from app.models.enums import UserRole
+from app.models.organization import Organization
 from app.models.user import User
 from app.schemas import UserCreate, UserResponse
 from app.security.auth import (
@@ -59,10 +60,17 @@ async def register(
             detail="Email already registered",
         )
 
+    # Each registration provisions a fresh tenant; the first user owns it.
+    org_name = body.organization_name or f"{body.email.split('@')[0]}'s organization"
+    org = Organization(name=org_name)
+    db.add(org)
+    await db.flush()
+
     user = User(
+        organization_id=org.id,
         email=body.email,
         hashed_password=hash_password(body.password),
-        role=UserRole.OPERATOR,
+        role=UserRole.ADMIN,
     )
     db.add(user)
     await db.flush()

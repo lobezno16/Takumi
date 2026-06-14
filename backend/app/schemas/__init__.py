@@ -38,6 +38,8 @@ class UserCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: str = Field(max_length=320)
     password: str = Field(min_length=8, max_length=128)
+    # Optional tenant name; a new organization is created per registration.
+    organization_name: str | None = Field(default=None, max_length=200)
 
 
 class UserLogin(BaseModel):
@@ -49,6 +51,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
     id: uuid.UUID
+    organization_id: uuid.UUID
     email: str
     role: UserRole
     created_at: datetime

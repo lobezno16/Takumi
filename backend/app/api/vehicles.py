@@ -1,4 +1,4 @@
-"""CRUD API router for vehicles."""
+"""CRUD API router for vehicles (organization-scoped)."""
 
 from __future__ import annotations
 
@@ -21,10 +21,12 @@ router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 async def list_vehicles(
     depot_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[Vehicle]:
-    """List all vehicles, optionally filtered by depot."""
-    query = select(Vehicle)
+    """List this organization's vehicles, optionally filtered by depot."""
+    query = select(Vehicle).where(
+        Vehicle.organization_id == current_user.organization_id
+    )
     if depot_id is not None:
         query = query.where(Vehicle.depot_id == depot_id)
     result = await db.execute(query)
@@ -35,10 +37,11 @@ async def list_vehicles(
 async def create_vehicle(
     body: VehicleCreate,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> Vehicle:
-    """Create a new vehicle."""
+    """Create a new vehicle in the caller's organization."""
     vehicle = Vehicle(
+        organization_id=current_user.organization_id,
         depot_id=body.depot_id,
         capacity=body.capacity,
         max_route_seconds=body.max_route_seconds,
@@ -55,10 +58,15 @@ async def create_vehicle(
 async def get_vehicle(
     vehicle_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> Vehicle:
-    """Get a vehicle by ID."""
-    result = await db.execute(select(Vehicle).where(Vehicle.id == vehicle_id))
+    """Get one of the caller's vehicles by ID."""
+    result = await db.execute(
+        select(Vehicle).where(
+            Vehicle.id == vehicle_id,
+            Vehicle.organization_id == current_user.organization_id,
+        )
+    )
     vehicle = result.scalar_one_or_none()
     if vehicle is None:
         raise HTTPException(
@@ -71,10 +79,15 @@ async def get_vehicle(
 async def delete_vehicle(
     vehicle_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    """Delete a vehicle by ID."""
-    result = await db.execute(select(Vehicle).where(Vehicle.id == vehicle_id))
+    """Delete one of the caller's vehicles by ID."""
+    result = await db.execute(
+        select(Vehicle).where(
+            Vehicle.id == vehicle_id,
+            Vehicle.organization_id == current_user.organization_id,
+        )
+    )
     vehicle = result.scalar_one_or_none()
     if vehicle is None:
         raise HTTPException(

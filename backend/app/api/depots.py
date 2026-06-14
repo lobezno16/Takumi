@@ -1,4 +1,4 @@
-"""CRUD API router for depots."""
+"""CRUD API router for depots (organization-scoped)."""
 
 from __future__ import annotations
 
@@ -18,30 +18,18 @@ from app.security.deps import get_current_user
 router = APIRouter(prefix="/api/depots", tags=["depots"])
 
 
-def _depot_to_response(depot: Depot) -> dict[str, Any]:
-    """Convert a Depot ORM object to a response dict with lat/lon."""
-    return {
-        "id": depot.id,
-        "name": depot.name,
-        "latitude": 0.0,  # Will be overridden by query
-        "longitude": 0.0,
-        "shift_start": depot.shift_start,
-        "shift_end": depot.shift_end,
-    }
-
-
 @router.get("", response_model=list[DepotResponse])
 async def list_depots(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
-    """List all depots."""
+    """List this organization's depots."""
     result = await db.execute(
         select(
             Depot,
             func.ST_Y(func.ST_GeomFromWKB(Depot.location)).label("lat"),
             func.ST_X(func.ST_GeomFromWKB(Depot.location)).label("lon"),
-        )
+        ).where(Depot.organization_id == current_user.organization_id)
     )
     rows = result.all()
     return [
@@ -61,11 +49,12 @@ async def list_depots(
 async def create_depot(
     body: DepotCreate,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create a new depot."""
+    """Create a new depot in the caller's organization."""
     point = func.ST_SetSRID(func.ST_MakePoint(body.longitude, body.latitude), 4326)
     depot = Depot(
+        organization_id=current_user.organization_id,
         name=body.name,
         location=point,
         shift_start=body.shift_start,
@@ -88,15 +77,18 @@ async def create_depot(
 async def get_depot(
     depot_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Get a depot by ID."""
+    """Get one of the caller's depots by ID."""
     result = await db.execute(
         select(
             Depot,
             func.ST_Y(func.ST_GeomFromWKB(Depot.location)).label("lat"),
             func.ST_X(func.ST_GeomFromWKB(Depot.location)).label("lon"),
-        ).where(Depot.id == depot_id)
+        ).where(
+            Depot.id == depot_id,
+            Depot.organization_id == current_user.organization_id,
+        )
     )
     row = result.one_or_none()
     if row is None:
@@ -117,10 +109,15 @@ async def get_depot(
 async def delete_depot(
     depot_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    """Delete a depot by ID."""
-    result = await db.execute(select(Depot).where(Depot.id == depot_id))
+    """Delete one of the caller's depots by ID."""
+    result = await db.execute(
+        select(Depot).where(
+            Depot.id == depot_id,
+            Depot.organization_id == current_user.organization_id,
+        )
+    )
     depot = result.scalar_one_or_none()
     if depot is None:
         raise HTTPException(

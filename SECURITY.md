@@ -20,7 +20,7 @@ vulnerability can ever exist.
 |------|---------|
 | **Secrets** | All via `pydantic-settings` from env. `.env` gitignored; `.env.example` holds placeholders only. `gitleaks` in pre-commit + CI. Production refuses to boot with an empty `JWT_SECRET`. |
 | **AuthN** | JWT **access** (short-lived) + **refresh** tokens, signed with an env secret; a `type` claim is enforced so a refresh token cannot be used as an access token. Argon2 password hashing (`passlib[argon2]`). |
-| **AuthZ** | Deny-by-default: every non-public endpoint requires a valid bearer token via a shared dependency; role checks (`operator`/`admin`) available via `require_admin`. |
+| **AuthZ** | Deny-by-default: every non-public endpoint requires a valid bearer token via a shared dependency; role checks (`operator`/`admin`) via `require_admin`. **Object-level / tenant isolation:** every tenant-owned query is scoped by the caller's `organization_id`, so a user cannot read or act on another organization's depots, vehicles, stops, orders, or agent interactions — verified by `tests/security/test_tenant_isolation.py`. |
 | **Input validation** | Strict Pydantic everywhere (`extra="forbid"`), enum-constrained slot codes/statuses, numeric bounds, bounded string lengths, request **body-size limit** (1 MB → 413), and **pagination** limits on list endpoints. |
 | **SQL injection** | SQLAlchemy ORM / Core with bound parameters only; PostGIS via `func.*` constructs. A test fails the build on any string-interpolated SQL. |
 | **CORS** | Explicit origin allowlist (the frontend origin) — never `*`. Restricted methods/headers. |

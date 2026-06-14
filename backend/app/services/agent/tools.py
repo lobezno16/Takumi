@@ -38,9 +38,13 @@ _DEPOT_LAT, _DEPOT_LON = 35.672, 139.817
 
 
 async def _load_order_with_coords(
-    db: AsyncSession, order_id: uuid.UUID
+    db: AsyncSession, order_id: uuid.UUID, organization_id: uuid.UUID
 ) -> tuple[Order, Stop, float, float]:
-    """Load an order, its stop, and the stop's coordinates, or raise."""
+    """Load a caller-owned order, its stop, and coordinates, or raise.
+
+    Scoping by ``organization_id`` enforces tenant isolation: an order in
+    another organization is indistinguishable from one that does not exist.
+    """
     result = await db.execute(
         select(
             Order,
@@ -49,7 +53,7 @@ async def _load_order_with_coords(
             func.ST_X(cast(Stop.location, Geometry)),
         )
         .join(Stop, Order.stop_id == Stop.id)
-        .where(Order.id == order_id)
+        .where(Order.id == order_id, Order.organization_id == organization_id)
     )
     row = result.first()
     if row is None:
@@ -58,11 +62,23 @@ async def _load_order_with_coords(
     return order, stop, float(lat), float(lon)
 
 
+async def load_order_for_org(
+    db: AsyncSession, order_id: uuid.UUID, organization_id: uuid.UUID
+) -> None:
+    """Assert an order exists and belongs to the organization, else raise."""
+    await _load_order_with_coords(db, order_id, organization_id)
+
+
 async def get_candidate_slots(
-    db: AsyncSession, order_id: uuid.UUID, day_of_week: int = 2
+    db: AsyncSession,
+    order_id: uuid.UUID,
+    organization_id: uuid.UUID,
+    day_of_week: int = 2,
 ) -> dict[str, Any]:
     """Return ML-ranked candidate slots for an order's recipient."""
-    _order, stop, _lat, _lon = await _load_order_with_coords(db, order_id)
+    _order, stop, _lat, _lon = await _load_order_with_coords(
+        db, order_id, organization_id
+    )
     candidates = await predict_candidate_slots(
         stop={
             "id": str(stop.id),
@@ -80,10 +96,10 @@ async def get_candidate_slots(
 
 
 async def propose_window(
-    db: AsyncSession, order_id: uuid.UUID, slot: SlotCode
+    db: AsyncSession, order_id: uuid.UUID, slot: SlotCode, organization_id: uuid.UUID
 ) -> dict[str, Any]:
     """Record a proposed window for the recipient (no state change)."""
-    await _load_order_with_coords(db, order_id)  # validates existence
+    await _load_order_with_coords(db, order_id, organization_id)  # validates ownership
     return {
         "order_id": str(order_id),
         "proposed_slot": slot.value,
@@ -92,10 +108,12 @@ async def propose_window(
 
 
 async def confirm_delivery(
-    db: AsyncSession, order_id: uuid.UUID, slot: SlotCode
+    db: AsyncSession, order_id: uuid.UUID, slot: SlotCode, organization_id: uuid.UUID
 ) -> dict[str, Any]:
     """Lock the recipient-confirmed delivery window onto the order."""
-    order, _stop, _lat, _lon = await _load_order_with_coords(db, order_id)
+    order, _stop, _lat, _lon = await _load_order_with_coords(
+        db, order_id, organization_id
+    )
     order.assigned_slot_code = slot.value
     order.status = OrderStatus.ASSIGNED
     await db.flush()
@@ -107,13 +125,17 @@ async def confirm_delivery(
 
 
 async def request_replan(
-    db: AsyncSession, session_id: uuid.UUID, reason_code: str
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    reason_code: str,
+    organization_id: uuid.UUID,
 ) -> dict[str, Any]:
     """Enqueue and run a re-optimization for a session's orders, then push the
     new route to connected clients over the WebSocket.
 
     ``session_id`` plays the role of the routing batch identifier (§10's
-    ``route_id``); ``reason_code`` must be allowlisted.
+    ``route_id``); ``reason_code`` must be allowlisted. Re-solving is scoped to
+    the caller's organization so a session id cannot pull another tenant's data.
     """
     if reason_code not in REPLAN_REASONS:
         raise AgentGuardError(f"invalid replan reason: {reason_code!r}")
@@ -130,7 +152,7 @@ async def request_replan(
         json.dumps({"session_id": str(session_id), "reason": reason_code}),
     )
 
-    # Re-solve over the session's stops using ML-derived penalties.
+    # Re-solve over the session's stops (org-scoped) using ML-derived penalties.
     rows = await db.execute(
         select(
             Order,
@@ -139,7 +161,10 @@ async def request_replan(
             func.ST_X(cast(Stop.location, Geometry)),
         )
         .join(Stop, Order.stop_id == Stop.id)
-        .where(Order.id.in_(order_ids))
+        .where(
+            Order.id.in_(order_ids),
+            Order.organization_id == organization_id,
+        )
     )
     opt_stops: list[OptStop] = []
     for i, (order, stop, lat, lon) in enumerate(rows.all()):

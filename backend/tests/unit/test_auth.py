@@ -54,8 +54,10 @@ async def test_register_new_user(client: AsyncClient) -> None:
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == email
-    assert data["role"] == "operator"
+    # The first user provisions and owns their organization, so is its admin.
+    assert data["role"] == "admin"
     assert "id" in data
+    assert "organization_id" in data
 
 
 async def test_register_duplicate_email(client: AsyncClient) -> None:

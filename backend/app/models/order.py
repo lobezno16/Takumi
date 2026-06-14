@@ -21,6 +21,9 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True
+    )
     stop_id: Mapped[uuid.UUID] = mapped_column(
         sa.Uuid, sa.ForeignKey("stops.id"), nullable=False
     )

@@ -76,10 +76,14 @@ async def handle_message(
     db: AsyncSession,
     order_id_raw: str | uuid.UUID,
     message: str,
+    organization_id: uuid.UUID,
     day_of_week: int = 2,
 ) -> AgentResult:
     """Process one inbound recipient message under full guard enforcement."""
     order_id = validate_order_id(order_id_raw)
+    # Enforce tenant ownership before any audit write or action (raises if the
+    # order is missing or belongs to another organization).
+    await tools.load_order_for_org(db, order_id, organization_id)
     await assert_under_action_cap(db, order_id)
 
     intent = parse_intent(message)
@@ -93,7 +97,9 @@ async def handle_message(
     if intent.slot is not None:
         action = AgentAction.CONFIRM_DELIVERY
         assert_action_allowed(action)
-        detail = await tools.confirm_delivery(db, order_id, intent.slot)
+        detail = await tools.confirm_delivery(
+            db, order_id, intent.slot, organization_id
+        )
         reply = (
             f"Thanks! We've locked your delivery to the "
             f"{_SLOT_LABELS[intent.slot]} window. See you then."

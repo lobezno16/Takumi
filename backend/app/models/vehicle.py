@@ -19,6 +19,9 @@ class Vehicle(Base):
     __tablename__ = "vehicles"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True
+    )
     depot_id: Mapped[uuid.UUID] = mapped_column(
         sa.Uuid, sa.ForeignKey("depots.id"), nullable=False
     )

@@ -97,17 +97,19 @@ async def create_session(
     request: Request,
     body: SessionRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
     """Seed a small delivery batch (stops + orders) for agent coordination."""
     seed = body.seed if body.seed is not None else uuid.uuid4().int % (2**31)
     synth = generate_stops(n_stops=body.n_orders, seed=seed)
+    org_id = current_user.organization_id
 
     summaries: list[OrderSummary] = []
     order_ids: list[str] = []
     for s in synth:
         point = func.ST_SetSRID(func.ST_MakePoint(s["longitude"], s["latitude"]), 4326)
         stop = Stop(
+            organization_id=org_id,
             address=s["address"],
             location=point,
             address_type=AddressType(s["address_type"]),
@@ -117,6 +119,7 @@ async def create_session(
         await db.flush()
 
         order = Order(
+            organization_id=org_id,
             stop_id=stop.id,
             parcel_size=ParcelSize.S80,
             demand=1,
@@ -168,11 +171,17 @@ async def post_message(
     request: Request,
     body: MessageRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> MessageResponse:
     """Deliver an inbound recipient message to the constrained agent loop."""
     try:
-        result = await handle_message(db, body.order_id, body.message, body.day_of_week)
+        result = await handle_message(
+            db,
+            body.order_id,
+            body.message,
+            current_user.organization_id,
+            body.day_of_week,
+        )
     except AgentGuardError as exc:
         # Generic client error; details stay in server logs (§13.15).
         raise HTTPException(
@@ -195,7 +204,7 @@ async def post_replan(
     request: Request,
     body: ReplanRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     """Trigger a re-optimization for a session and push it over the WebSocket."""
     try:
@@ -205,7 +214,9 @@ async def post_replan(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid session id."
         ) from exc
     try:
-        return await tools.request_replan(db, session_id, body.reason_code)
+        return await tools.request_replan(
+            db, session_id, body.reason_code, current_user.organization_id
+        )
     except AgentGuardError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -217,12 +228,16 @@ async def post_replan(
 async def list_interactions(
     order_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[InteractionItem]:
-    """Return the audit trail of agent interactions for an order."""
+    """Return the audit trail for one of the caller's orders."""
     result = await db.execute(
         select(AgentInteraction)
-        .where(AgentInteraction.order_id == order_id)
+        .join(Order, AgentInteraction.order_id == Order.id)
+        .where(
+            AgentInteraction.order_id == order_id,
+            Order.organization_id == current_user.organization_id,
+        )
         .order_by(AgentInteraction.created_at)
     )
     return [

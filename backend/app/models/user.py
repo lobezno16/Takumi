@@ -1,4 +1,4 @@
-"""User model — authentication only, not tenancy."""
+"""User model — authentication and tenant membership."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True
+    )
     email: Mapped[str] = mapped_column(
         sa.String(320), unique=True, nullable=False, index=True
     )

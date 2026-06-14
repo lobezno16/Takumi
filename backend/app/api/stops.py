@@ -1,4 +1,4 @@
-"""CRUD API router for stops."""
+"""CRUD API router for stops (organization-scoped)."""
 
 from __future__ import annotations
 
@@ -20,12 +20,17 @@ router = APIRouter(prefix="/api/stops", tags=["stops"])
 @router.get("", response_model=list[StopResponse])
 async def list_stops(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[Stop]:
-    """List stops with bounded pagination (§13.4)."""
-    result = await db.execute(select(Stop).limit(limit).offset(offset))
+    """List this organization's stops with bounded pagination (§13.4)."""
+    result = await db.execute(
+        select(Stop)
+        .where(Stop.organization_id == current_user.organization_id)
+        .limit(limit)
+        .offset(offset)
+    )
     return list(result.scalars().all())
 
 
@@ -33,11 +38,12 @@ async def list_stops(
 async def create_stop(
     body: StopCreate,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> Stop:
-    """Create a new delivery stop."""
+    """Create a new delivery stop in the caller's organization."""
     point = func.ST_SetSRID(func.ST_MakePoint(body.longitude, body.latitude), 4326)
     stop = Stop(
+        organization_id=current_user.organization_id,
         address=body.address,
         location=point,
         address_type=body.address_type,
@@ -53,10 +59,15 @@ async def create_stop(
 async def get_stop(
     stop_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> Stop:
-    """Get a stop by ID."""
-    result = await db.execute(select(Stop).where(Stop.id == stop_id))
+    """Get one of the caller's stops by ID."""
+    result = await db.execute(
+        select(Stop).where(
+            Stop.id == stop_id,
+            Stop.organization_id == current_user.organization_id,
+        )
+    )
     stop = result.scalar_one_or_none()
     if stop is None:
         raise HTTPException(
@@ -69,10 +80,15 @@ async def get_stop(
 async def delete_stop(
     stop_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> None:
-    """Delete a stop by ID."""
-    result = await db.execute(select(Stop).where(Stop.id == stop_id))
+    """Delete one of the caller's stops by ID."""
+    result = await db.execute(
+        select(Stop).where(
+            Stop.id == stop_id,
+            Stop.organization_id == current_user.organization_id,
+        )
+    )
     stop = result.scalar_one_or_none()
     if stop is None:
         raise HTTPException(

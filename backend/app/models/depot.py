@@ -20,6 +20,9 @@ class Depot(Base):
     __tablename__ = "depots"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(sa.String(200), nullable=False)
     location: Mapped[str] = mapped_column(
         Geography(geometry_type="POINT", srid=4326, spatial_index=True),
