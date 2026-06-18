@@ -335,4 +335,8 @@ Where does the data come from?
 
 Why OR-Tools over a heuristic?
 
-Is the agent an
+Is the agent an LLM?
+
+What's the business model?
+
+What's actually novel?
