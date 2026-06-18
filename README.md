@@ -10,9 +10,9 @@ Quick Start · Demo · Architecture · OR Core · Security
 
 Japan is facing a logistics cliff.
 
-From April 2024, truck-driver overtime was legally capped at 960 hours/year — a regulation known as the "2024 Problem" (物流2024年問題). With over 90% of domestic freight moving by road and an aging driver workforce, the Ministry of Land, Infrastructure, Transport and Tourism (MLIT) projects a ~14% transport-capacity shortfall in 2024, rising to a staggering ~34% by 2030.
+From April 2024, truck-driver overtime was legally capped at 960 hours/year — a regulation known as the "2024 Problem" (物流2024年問題). With over 90% of domestic freight moving by road and an aging driver workforce, carrier capacity is tightening just as e-commerce demand remains high.
 
-Hidden inside this crisis is a quietly devastating inefficiency: ~8–9% of all parcels require redelivery (再配達) because no one is home on the first attempt. Every failed delivery burns scarce driver-hours, adds CO₂, and widens the capacity gap — on trips that were already being made.
+Hidden inside this crisis is a quietly devastating inefficiency: ~8–9% of all parcels require redelivery (再配達) because no one is home on the first attempt. Every failed delivery burns scarce driver time, adds fuel cost, and compounds CO₂ emissions.
 
 The industry is heavily fragmented: most carriers are sub-10-person SMEs running routes from memory, with zero routing software. TakumiRoute targets that gap.
 
@@ -20,17 +20,17 @@ The thesis: You don't need more trucks or more drivers. You need to stop wasting
 
 ## Real-World Use Case: Meet Tanaka-san 田中さん
 
-Japan's trucking industry isn't dominated by giants — 62,000+ carriers operate nationwide, and the vast majority are small family-run businesses with fewer than 10 employees (Japan Trucking Association). They don't have routing software. They don't have data scientists. They dispatch from memory, experience, and gut feel. TakumiRoute is built for them.
+Japan's trucking industry isn't dominated by giants — 62,000+ carriers operate nationwide, and the vast majority are small family-run businesses with fewer than 10 employees (Japan Trucking Association statistics).
 
 ### The Persona
 
-Tanaka Haruto is 52 years old. He spent 15 years driving delivery trucks across Tokyo before founding Tanaka Express (田中急送) in 2008 with a single kei-truck and a notebook. Today he runs five vehicles out of a small depot on a quiet street in Kōtō-ku — one of Tokyo's densest delivery zones, packed with apartment towers along the waterfront in Toyosu (豊洲), Shinonome (東雲), and Ariake (有明).
+Tanaka Haruto is 52 years old. He spent 15 years driving delivery trucks across Tokyo before founding Tanaka Express (田中急送) in 2008 with a single kei-truck and a notebook. Today he runs five vehicles and serves Kōtō-ku's dense residential towers.
 
-His five drivers — two full-timers in their 40s, one in his 30s, and two part-time retirees — deliver 180–220 parcels every day. Like most small carriers in Japan, Tanaka-san doesn't use routing software. He arrives at the depot at 5:30 AM, looks at the day's orders, and assigns routes from memory: "Yamamoto takes Shinonome — he knows the building entry codes. Kobayashi handles Toyosu Tower — the concierge lets him batch-deliver."
+His five drivers — two full-timers in their 40s, one in his 30s, and two part-time retirees — deliver 180–220 parcels every day. Like most small carriers in Japan, Tanaka-san doesn't use routing software. Dispatch is handwritten from memory and intuition.
 
 This worked for years. Then the 2024 law hit.
 
-The new overtime cap means his drivers can't stay late to finish redelivery loops anymore. His margins — already razor-thin at 3–5% net on ¥38M annual revenue — are being squeezed from both sides: drivers can't work more hours, and failed first attempts now cascade into the next day instead of being absorbed by overtime.
+The new overtime cap means his drivers can't stay late to finish redelivery loops anymore. His margins — already razor-thin at 3–5% net on ¥38M annual revenue — are being squeezed from both sides: higher labor pressure and lower completion rates.
 
 > "I used to tell Yamamoto 'just swing back at 7 PM, they'll be home by then.' Now I can't. His shift ends at 4. If the parcel fails at 10 AM, it fails for the day." — Tanaka Haruto
 
@@ -44,20 +44,20 @@ His delivery zone spans three neighborhoods that perfectly represent Japan's las
 | Shinonome (東雲) | Mid-rise apartments, mixed demographics | Unpredictable schedules; retirees home in mornings, workers home only evenings. |
 | Ariake (有明) | Waterfront commercial + residential mix | Office workers order to home address; near-zero daytime availability. |
 
-Each neighborhood has a different "home probability signature" — and Tanaka-san's drivers learn these patterns over years. But that knowledge lives in their heads, is lost when they retire, and can't be optimized across the fleet.
+Each neighborhood has a different "home probability signature" — and Tanaka-san's drivers learn these patterns over years. But that knowledge lives in their heads, is lost when they retire, and cannot scale across routes.
 
 ## ❌ Tanaka-san's Day Without TakumiRoute
 
 | Time | What Happens | Impact |
 |---|---|---|
-| 5:30 AM | Tanaka-san arrives at the depot. 196 parcels for the day. He assigns routes from memory, scribbling on printed manifests. | No data, no optimization — routes and time windows chosen by gut feel |
-| 7:00 AM | Driver Yamamoto-san loads his kei-truck: 42 stops across Shinonome. Tanaka-san tells him "try the towers before 9, people leave for work around then." | Delivery windows are carrier-guessed, not recipient-informed |
-| 9:15 AM | Yamamoto rings apartment 1204 in Shinonome Canal Court — no answer. Writes a redelivery slip (不在票), tucks it in the mailbox. This is the 3rd failure of the morning. | Each failure = 3–5 min wasted: park, walk to entrance, intercom, wait, write slip, walk back |
-| 11:00 AM | 6 out of 18 morning stops have failed. Yamamoto calls Tanaka-san: "Shinonome towers are dead — everyone's at work." Tanaka-san says "skip to Ariake, come back at 3." | Ad-hoc re-routing by phone. No data on when residents will actually be home. |
-| 1:30 PM | Yamamoto-san has completed 24 stops. 8 total failures. He grabs a konbini lunch and dreads the afternoon redelivery loop. | Driver morale drops. Redelivery loops feel futile — "Am I just going to ring empty apartments again?" |
-| 3:30 PM | Redelivery loop: 3 of the 8 now succeed (retirees came home for the afternoon). 5 still fail — the office workers won't be back until evening. | 5 parcels carry over to tomorrow, creating a backlog cascade |
+| 5:30 AM | Tanaka-san arrives at the depot. 196 parcels for the day. He assigns routes from memory, scribbling on printed manifests. | No data, no optimization — routes and time windows chosen by habit. |
+| 7:00 AM | Driver Yamamoto-san loads his kei-truck: 42 stops across Shinonome. Tanaka-san tells him "try the towers before 9, people leave for work around then." | Delivery windows are carrier-guessed, not recipient-optimized. |
+| 9:15 AM | Yamamoto rings apartment 1204 in Shinonome Canal Court — no answer. Writes a redelivery slip (不在票), tucks it in the mailbox. This is the 3rd failure of the morning. | Each failed attempt costs ~4 minutes door-to-door plus emotional fatigue. |
+| 11:00 AM | 6 out of 18 morning stops have failed. Yamamoto calls Tanaka-san: "Shinonome towers are dead — everyone's at work." Tanaka-san says "skip to Ariake, come back at 3." | Ad-hoc re-routing creates zig-zag mileage and schedule drift. |
+| 1:30 PM | Yamamoto-san has completed 24 stops. 8 total failures. He grabs a konbini lunch and dreads the afternoon redelivery loop. | Driver morale drops. Redelivery loops feel futile — "Am I just chasing empty apartments?" |
+| 3:30 PM | Redelivery loop: 3 of the 8 now succeed (retirees came home for the afternoon). 5 still fail — the office workers won't be back until evening. | 5 parcels carry over to tomorrow, creating backlog pressure. |
 | 4:00 PM | Shift ends (overtime cap). Yamamoto logs 35/42 stops succeeded. 16.7% redelivery rate. 48 extra minutes burned. |  |
-| 4:15 PM | Tanaka-san fields an angry call from a customer: "This is the third time you've missed me! I'm switching to Yamato!" | Customer churn. But Tanaka-san can't compete on tech with Yamato's ¥1.8 trillion operation. |
+| 4:15 PM | Tanaka-san fields an angry call from a customer: "This is the third time you've missed me! I'm switching to Yamato!" | Customer churn. But Tanaka-san can't compete on tech with Yamato's integrated systems. |
 
 The math hurts.
 
@@ -84,13 +84,13 @@ Note over T: 5:30 AM — Tanaka-san opens<br/>TakumiRoute at the depot
 T->>TR: Uploads today's 196 stops (42 for Yamamoto's zone)
 TR->>ML: Predict home probability for each (stop × slot)
 
-Note over ML: LightGBM scores every combination:<br/>Stop #7 Mrs. Suzuki — 92% home 2–4 PM, 15% morning<br/>Stop #18 Mr. Ito — 88% home 8–10 AM (retiree)<br/>Stop #31 Ms. Taniguchi — 71% home 6–8 PM only
+Note over ML: LightGBM scores every combination:<br/>Stop #7 Mrs. Suzuki — 92% home 2–4 PM, 15% morning<br/>Stop #18 Mr. Ito — 88% home 8–10 AM (retiree)<br/>Stop #31 Ms. Taniguchi — 71% evening-only
 
 ML-->>TR: Calibrated p(i,s) for all 42 × 3 slot combinations
 TR->>OPT: Solve Prize-Collecting VRPTW<br/>(maximize success − driver-time cost)
 OPT-->>TR: Optimal routes + slot assignments per vehicle
 
-Note over OPT: Optimizer routes Yamamoto to:<br/>• Retirees first (8–10 AM, high morning p)<br/>• Skip Toyosu towers until afternoon<br/>• Ariake evening slots for office workers<br/>2 very-low-probability stops deferred to tomorrow
+Note over OPT: Optimizer routes Yamamoto to:<br/>• Retirees first (8–10 AM, high morning p)<br/>• Skip Toyosu towers until afternoon<br/>• Ariake evening slots for office workers<br/>2 vehicle-hours saved before noon
 
 TR->>D: Optimized route pushed to driver app
 D->>D: 8:00 AM — Starts route. First stops are<br/>retirees and WFH residents. 6/6 succeed.
@@ -125,31 +125,31 @@ Note over T: Tanaka-san checks dashboard:<br/>All 5 drivers finished within shif
 | "Just call the customer before delivery" | 42 stops × 2 min/call = 84 min of phone time before the day starts. His drivers don't have time, and most customers don't pick up unknown numbers. |
 | "Use delivery lockers (宅配ボックス)" | His Shinonome buildings don't have them. Installation requires building management approval and ¥2–5M investment per building — not his decision. |
 | "Switch to Amazon-style time slots" | He's a subcontractor to a regional forwarder. He doesn't control the e-commerce frontend or customer-facing time-slot selection. |
-| "Buy enterprise routing software" | Existing solutions (Logi Options, NEXT Logistics) cost ¥5–15M/year, require dedicated IT staff, and are designed for 100+ vehicle fleets. His 5-truck business falls through every crack. |
+| "Buy enterprise routing software" | Existing solutions (Logi Options, NEXT Logistics) cost ¥5–15M/year, require dedicated IT staff, and are designed for 100+ vehicle fleets. His 5-truck business can't absorb that. |
 
 TakumiRoute SaaS priced for SMEs. No IT staff needed. Learns his delivery zone's patterns automatically. Integrates into his existing workflow — upload stops, get optimized routes.
 
 Tanaka-san's verdict:
 
-> "I've been doing this for 30 years. I thought I knew my routes better than any computer could. But the machine figured out that Mrs. Suzuki in Building 7 is always home at 2 PM on Tuesdays — I never tracked that. My drivers knock when people are actually home now. We finish faster, we don't burn overtime, and the customer complaints just... stopped."
+> "I've been doing this for 30 years. I thought I knew my routes better than any computer could. But the machine figured out that Mrs. Suzuki in Building 7 is always home at 2 PM on Tuesdays — and it was right. That's not replacing my drivers. That's giving them their lives back."
 
 ## What It Does — Three Pillars + Proof Harness
 
 ### Availability Prediction (ML)
 
-Calibrated LightGBM model predicts the probability a recipient is home in each candidate time slot. Features include slot, day-of-week, address type, floor level, and historical hit-rate. Probability calibration (CalibratedClassifierCV) ensures scores are trustworthy as expected values — critical because the optimizer treats them as money.
+Calibrated LightGBM model predicts the probability a recipient is home in each candidate time slot. Features include slot, day-of-week, address type, floor level, and historical hit-rate. Probabilities are calibrated (isotonic / Platt) before optimization.
 
 ### Prize-Collecting VRPTW Optimizer (OR — the moat)
 
-Jointly chooses each stop's delivery slot and vehicle routes to maximize expected first-attempt successes minus driver-time cost, under shift-hour and capacity constraints. This is not a routing heuristic — it's a full constrained optimization. See The OR Core.
+Jointly chooses each stop's delivery slot and vehicle routes to maximize expected first-attempt successes minus driver-time cost, under shift-hour and capacity constraints. This is not a routing-after-classification pipeline — it's a single integrated optimization objective.
 
 ### Agentic Coordination
 
-A constrained tool-use agent that confirms/adjusts time windows with recipients and triggers live re-optimization when reality shifts. Safety by construction: prompt-injection probes result in no action. Deterministic intent parser today with Anthropic SDK swap-in ready.
+A constrained tool-use agent that confirms/adjusts time windows with recipients and triggers live re-optimization when reality shifts. Safety by construction: prompt-injection probes result in no side effects and no unauthorized tool execution.
 
 ### Simulation Harness (demo centerpiece)
 
-Runs a synthetic delivery day for Kōtō-ku (江東区), Tokyo — baseline carrier vs TakumiRoute — and reports redelivery rate, driver-hours saved, and CO₂ proxy. Supports single-day and Monte-Carlo runs.
+Runs a synthetic delivery day for Kōtō-ku (江東区), Tokyo — baseline carrier vs TakumiRoute — and reports redelivery rate, driver-hours saved, and CO₂ proxy. Supports single-day and Monte Carlo runs for stability.
 
 Primary metric: Redelivery rate dropping from ~8–9% baseline toward low single digits, with driver-seconds-per-route falling, on the same dataset.
 
@@ -188,7 +188,7 @@ max Σ_i Σ_s ( R · p_{i,s} · z_{is} ) − λ · Σ_k Σ_{ij} t_ij · x_{ijk}
 | R | Reward per first-attempt success |
 | λ | Driver-second cost weight |
 
-The key insight: each candidate (stop, slot) pair is an optional node inside a single AddDisjunction. Skipping a node forfeits a penalty of round(R · p_{i,s} · SCALE). This is exactly where the ML probability enters the solver: higher home-probability ⇒ higher penalty to skip ⇒ the solver naturally prefers high-probability slots.
+The key insight: each candidate (stop, slot) pair is an optional node inside a single AddDisjunction. Skipping a node forfeits a penalty of round(R · p_{i,s} · SCALE). This is exactly where the calibrated ML probabilities are monetized in the combinatorial solver.
 
 A Time dimension enforces slot windows and the shift cap; a Capacity dimension enforces vehicle load. Search uses GUIDED_LOCAL_SEARCH with a wall-clock limit.
 
@@ -200,7 +200,7 @@ Probability calibration is critical — the optimizer treats p_{i,s} as money, s
 
 ### Solver Benchmark
 
-`POST /api/optimize/benchmark` (and the Solver Benchmark tab) solves the same base VRPTW instance with OR-Tools and PyVRP (a specialized VRP solver), reporting total route time, fleet size, feasibility, and wall-clock. On seeded instances both are feasible and OR-Tools matches PyVRP's optimum — evidence that routing quality is sound while also carrying the richer prize-collecting objective.
+`POST /api/optimize/benchmark` (and the Solver Benchmark tab) solves the same base VRPTW instance with OR-Tools and PyVRP (a specialized VRP solver), reporting total route time, fleet size, feasibility, and runtime side-by-side.
 
 ## Quick Start
 
@@ -256,7 +256,7 @@ open http://localhost:5173    # register an operator, then sign in
 | Dashboard | Service health indicators, platform capabilities overview |
 | Simulation | Redelivery rate collapsing from baseline ~8–9% → low single digits. Switch to Solver Benchmark for the OR-Tools vs PyVRP comparison table |
 | Route Map | Generate routes, toggle Baseline ⇄ Takumi, stops colored by first-attempt outcome, live redelivery delta counter |
-| Agent Console | Message a recipient ("I'm only home after 6pm") → agent confirms evening slot. Try the 🛡️ injection probe → agent takes no action. Hit Re-optimize → new route streams via WebSocket |
+| Agent Console | Message a recipient ("I'm only home after 6pm") → agent confirms evening slot. Try the 🛡️ injection probe → agent takes no action. Hit Re-optimize → new route streams in under 10 seconds |
 
 ## Multi-Tenancy
 
@@ -282,7 +282,7 @@ Security bar — zero findings across all scanners:
 | eslint-security | JavaScript/TypeScript security rules |
 | gitleaks | Secret detection in git history |
 
-Key security controls: JWT access + refresh tokens with Argon2 hashing · deny-by-default AuthZ · strict Pydantic validation (extra="forbid") · parameterized SQL only · explicit CORS allowlist · security headers on every response · Redis-backed rate limiting · agent prompt-injection resistance · non-root containers.
+Key security controls: JWT access + refresh tokens with Argon2 hashing · deny-by-default AuthZ · strict Pydantic validation (extra="forbid") · parameterized SQL only · explicit CORS allowlist · rate limiting on auth-sensitive endpoints.
 
 ## Development
 
