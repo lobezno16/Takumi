@@ -69,46 +69,49 @@ At ¥1,800/hr loaded cost, that's ¥1.05M ($7,000) in direct waste — plus fuel
 
 ## ✅ Tanaka-san's Day With TakumiRoute
 
+
+---
+
+Use this exact fixed block in your README:
+
 ```mermaid
 sequenceDiagram
-participant T as 🧑 Tanaka-san (Operator)
-participant TR as ⚙️ TakumiRoute (Platform)
-participant ML as 🧠 ML Service
-participant OPT as 📐 Optimizer
-participant AG as 🤖 Agent
-participant D as 🚚 Yamamoto-san (Driver)
-participant R as 🏠 Recipients
+    participant T as 🧑 Tanaka-san (Operator)
+    participant TR as ⚙️ TakumiRoute (Platform)
+    participant ML as 🧠 ML Service
+    participant O as 📐 Optimizer
+    participant AG as 🤖 Agent
+    participant D as 🚚 Yamamoto-san (Driver)
+    participant R as 🏠 Recipients
 
-Note over T: 5:30 AM — Tanaka-san opens<br/>TakumiRoute at the depot
+    Note over T: 5:30 AM — Tanaka-san opens<br/>TakumiRoute at the depot
 
-T->>TR: Uploads today's 196 stops (42 for Yamamoto's zone)
-TR->>ML: Predict home probability for each (stop × slot)
+    T->>TR: Uploads today's 196 stops (42 for Yamamoto's zone)
+    TR->>ML: Predict home probability for each (stop × slot)
 
-Note over ML: LightGBM scores every combination:<br/>Stop #7 Mrs. Suzuki — 92% home 2–4 PM, 15% morning<br/>Stop #18 Mr. Ito — 88% home 8–10 AM (retiree)<br/>Stop #31 Ms. Taniguchi — 71% evening-only
+    Note over ML: LightGBM scores every combination:<br/>Stop #7 Mrs. Suzuki — 92% home 2–4 PM, 15% morning<br/>Stop #18 Mr. Ito — 88% home 8–10 AM (retiree)<br/>Stop #31 Ms. Taniguchi — 71% evening-only
 
-ML-->>TR: Calibrated p(i,s) for all 42 × 3 slot combinations
-TR->>OPT: Solve Prize-Collecting VRPTW<br/>(maximize success − driver-time cost)
-OPT-->>TR: Optimal routes + slot assignments per vehicle
+    ML-->>TR: Calibrated p(i,s) for all 42 × 3 slot combinations
+    TR->>O: Solve Prize-Collecting VRPTW<br/>(maximize success − driver-time cost)
+    O-->>TR: Optimal routes + slot assignments per vehicle
 
-Note over OPT: Optimizer routes Yamamoto to:<br/>• Retirees first (8–10 AM, high morning p)<br/>• Skip Toyosu towers until afternoon<br/>• Ariake evening slots for office workers<br/>2 vehicle-hours saved before noon
+    Note over O: Optimizer routes Yamamoto to:<br/>• Retirees first (8–10 AM, high morning p)<br/>• Skip Toyosu towers until afternoon<br/>• Ariake evening slots for office workers<br/>2 vehicle-hours saved before noon
 
-TR->>D: Optimized route pushed to driver app
-D->>D: 8:00 AM — Starts route. First stops are<br/>retirees and WFH residents. 6/6 succeed.
+    TR->>D: Optimized route pushed to driver app
+    D->>D: 8:00 AM — Starts route. First stops are<br/>retirees and WFH residents. 6/6 succeed.
 
-R->>AG: Sato-san (Stop #22) texts:<br/>"Meeting ran late — home after 6 PM today"
-AG->>AG: Intent parser extracts: SlotCode=EVENING
-AG->>OPT: Re-optimize with Sato-san's evening constraint
-OPT-->>D: Updated route streamed via WebSocket
+    R->>AG: Sato-san (Stop #22) texts:<br/>"Meeting ran late — home after 6 PM today"
+    AG->>AG: Intent parser extracts: SlotCode=EVENING
+    AG->>O: Re-optimize with Sato-san's evening constraint
+    O-->>D: Updated route streamed via WebSocket
 
-Note over D: Yamamoto-san's phone buzzes:<br/>"Route updated — Stop #22 moved to 6:15 PM"
+    Note over D: Yamamoto-san's phone buzzes:<br/>"Route updated — Stop #22 moved to 6:15 PM"
 
-D->>D: 3:45 PM — 38/40 attempted stops succeeded.<br/>Sato-san and 1 other moved to evening pass.
-D->>D: 6:15 PM — Evening pass: both succeed.
-D->>D: Route complete. 40/42 stops delivered. 0 redeliveries.<br/>2 ultra-low-probability stops held for tomorrow's batch.
+    D->>D: 3:45 PM — 38/40 attempted stops succeeded.<br/>Sato-san and 1 other moved to evening pass.
+    D->>D: 6:15 PM — Evening pass: both succeed.
+    D->>D: Route complete. 40/42 stops delivered. 0 redeliveries.<br/>2 ultra-low-probability stops held for tomorrow's batch.
 
-Note over T: Tanaka-san checks dashboard:<br/>All 5 drivers finished within shift hours.<br/>Fleet redelivery rate: 2.8%
-```
-
+    Note over T: Tanaka-san checks dashboard:<br/>All 5 drivers finished within shift hours.<br/>Fleet redelivery rate: 2.8%
 | Metric | Without TakumiRoute | With TakumiRoute | Delta |
 |---|---:|---:|---:|
 | First-attempt success | ~83% | ~96%+ | +13 pp |
