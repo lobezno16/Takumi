@@ -69,11 +69,6 @@ At ¥1,800/hr loaded cost, that's ¥1.05M ($7,000) in direct waste — plus fuel
 
 ## ✅ Tanaka-san's Day With TakumiRoute
 
-
----
-
-Use this exact fixed block in your README:
-
 ```mermaid
 sequenceDiagram
     participant T as 🧑 Tanaka-san (Operator)
@@ -112,6 +107,8 @@ sequenceDiagram
     D->>D: Route complete. 40/42 stops delivered. 0 redeliveries.<br/>2 ultra-low-probability stops held for tomorrow's batch.
 
     Note over T: Tanaka-san checks dashboard:<br/>All 5 drivers finished within shift hours.<br/>Fleet redelivery rate: 2.8%
+```
+
 | Metric | Without TakumiRoute | With TakumiRoute | Delta |
 |---|---:|---:|---:|
 | First-attempt success | ~83% | ~96%+ | +13 pp |
@@ -120,7 +117,6 @@ sequenceDiagram
 | Route completion time | At or beyond overtime cap | 35 min early on average | Shift-safe |
 | Customer complaints | 3–4 per week | Rare | Trust restored |
 | Annual cost of redelivery waste | ~¥3.5M ($23,000) | ~¥600K ($4,000) | ↓ ¥2.9M saved |
-
 ## Why Tanaka-san Couldn't Solve This Alone
 
 | Option | Why It Doesn't Work |
