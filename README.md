@@ -399,7 +399,7 @@ sequenceDiagram
     participant FE as Frontend (TanStack Query)
     participant MW as Middleware chain
     participant DEP as Auth dependency
-    participant OPT as Optimizer service
+    participant OPTZ as Optimizer service
     participant MTX as Matrix service
     participant DB as PostgreSQL
 
@@ -407,13 +407,13 @@ sequenceDiagram
     Note over MW: CORS allowlist → body-size limit (1 MB)<br/>→ rate limit (slowapi) → security headers
     MW->>DEP: Validate access token
     DEP->>DB: Resolve user + organization_id
-    DEP-->>OPT: Inject current_user (tenant scope)
-    OPT->>DB: Load depot / vehicles / stops (WHERE org_id = caller)
-    OPT->>MTX: Travel-time matrix (OSRM, else Haversine)
-    MTX-->>OPT: NxN seconds matrix
-    OPT->>OPT: Build CVRPTW + AddDisjunction(p→penalty)
-    OPT->>OPT: PATH_CHEAPEST_ARC → GUIDED_LOCAL_SEARCH
-    OPT-->>FE: Routes + slot assignments + KPIs
+    DEP-->>OPTZ: Inject current_user (tenant scope)
+    OPTZ->>DB: Load depot / vehicles / stops (WHERE org_id = caller)
+    OPTZ->>MTX: Travel-time matrix (OSRM, else Haversine)
+    MTX-->>OPTZ: NxN seconds matrix
+    OPTZ->>OPTZ: Build CVRPTW + AddDisjunction(p→penalty)
+    OPTZ->>OPTZ: PATH_CHEAPEST_ARC → GUIDED_LOCAL_SEARCH
+    OPTZ-->>FE: Routes + slot assignments + KPIs
     Note over MW,FE: Unhandled errors → generic 500 (detail logged server-side)
 ```
 
