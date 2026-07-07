@@ -10,6 +10,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    // Keep the map/chart/animation vendors in their own cacheable chunks.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          maplibre: ['maplibre-gl'],
+          charts: ['recharts'],
+          motion: ['motion'],
+        },
+      },
+    },
+  },
   server: {
     // Poll the filesystem so hot-reload works through Docker bind mounts on
     // Windows/macOS, where native file-change events are not propagated.

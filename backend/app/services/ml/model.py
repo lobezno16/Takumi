@@ -35,6 +35,63 @@ _MODEL_DIR = Path("/app/data/models")
 _MODEL_PATH = _MODEL_DIR / "home_prob_model.pkl"
 
 
+def _calibration_curve(
+    y_pred_proba: np.ndarray,
+    y_true: np.ndarray,
+    n_bins: int = 10,
+) -> list[dict[str, Any]]:
+    """Bin predictions and compare mean predicted vs observed frequency.
+
+    A well-calibrated model tracks the diagonal: in the bucket of stops
+    scored ~0.7, ~70% of recipients were actually home.
+    """
+    bins = np.linspace(0.0, 1.0, n_bins + 1)
+    curve: list[dict[str, float]] = []
+    for i in range(n_bins):
+        mask = (y_pred_proba >= bins[i]) & (
+            (y_pred_proba < bins[i + 1]) if i < n_bins - 1 else (y_pred_proba <= 1.0)
+        )
+        count = int(mask.sum())
+        if count == 0:
+            continue
+        entry: dict[str, Any] = {
+            "bin_start": round(float(bins[i]), 2),
+            "bin_end": round(float(bins[i + 1]), 2),
+            "mean_predicted": round(float(y_pred_proba[mask].mean()), 4),
+            "observed_rate": round(float(y_true[mask].mean()), 4),
+            "count": count,
+        }
+        curve.append(entry)
+    return curve
+
+
+def _feature_importance(model: CalibratedClassifierCV) -> list[dict[str, Any]]:
+    """Average LightGBM split importances across the calibration folds."""
+    importances = np.zeros(len(FEATURE_COLUMNS), dtype=float)
+    n = 0
+    for calibrated in getattr(model, "calibrated_classifiers_", []):
+        estimator = getattr(calibrated, "estimator", None)
+        raw = getattr(estimator, "feature_importances_", None)
+        if raw is not None:
+            importances += np.asarray(raw, dtype=float)
+            n += 1
+    if n == 0:
+        return []
+    importances /= n
+    total = importances.sum()
+    if total > 0:
+        importances /= total
+    ranked = sorted(
+        zip(FEATURE_COLUMNS, importances, strict=True),
+        key=lambda pair: pair[1],
+        reverse=True,
+    )
+    return [
+        {"name": name, "importance": round(float(value), 4)}
+        for name, value in ranked
+    ]
+
+
 def train_model(
     X: pd.DataFrame,
     y: pd.Series,
@@ -102,6 +159,8 @@ def train_model(
         "train_size": len(X_train),
         "test_size": len(X_test),
         "calibration_method": calibration_method,
+        "calibration_curve": _calibration_curve(y_pred_proba, y_test.to_numpy()),
+        "feature_importance": _feature_importance(calibrated_model),
     }
 
     logger.info(

@@ -24,6 +24,9 @@ class SimulationRequest(BaseModel):
     slot_code: str = Field(default="am", pattern="^(am|t1214|t1416|t1618|t1821)$")
     day_of_week: int = Field(default=2, ge=0, le=6)
     seed: int | None = None
+    # Per-solver wall-clock budget. None keeps the engine defaults (10s/15s);
+    # interactive clients pass a small value for a fast cockpit load.
+    solver_time_limit_seconds: int | None = Field(default=None, ge=1, le=30)
 
 
 class KPIsOutput(BaseModel):
@@ -63,6 +66,10 @@ class RouteStopDetailOutput(BaseModel):
     assigned_slot: str
     predicted_prob: float
     outcome: str
+    address: str
+    address_type: str
+    floor: int | None
+    slot_probs: dict[str, float]
 
 
 class RouteDetailOutput(BaseModel):
@@ -125,6 +132,7 @@ async def run_single_simulation(
         slot_code=body.slot_code,
         day_of_week=body.day_of_week,
         seed=body.seed,
+        solver_time_limit_seconds=body.solver_time_limit_seconds,
     )
     return SimulationResponse(
         run_id=result.run_id,
@@ -170,6 +178,7 @@ async def run_detailed_simulation(
         day_of_week=body.day_of_week,
         seed=body.seed,
         detailed=True,
+        solver_time_limit_seconds=body.solver_time_limit_seconds,
     )
     return DetailedSimulationResponse(
         run_id=result.run_id,

@@ -70,6 +70,12 @@ class RouteStopDetail:
     assigned_slot: str
     predicted_prob: float
     outcome: str  # "success" | "miss"
+    address: str = ""
+    address_type: str = "apartment"
+    floor: int | None = None
+    # Predicted home probability per candidate slot, so the client can show
+    # the full slot-ranking panel without one request per stop.
+    slot_probs: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -175,6 +181,8 @@ def _build_route_detail(
     slot_by_stop: dict[str, str],
     predicted_probs: dict[str, float],
     outcomes: dict[str, str],
+    address_by_stop: dict[str, str] | None = None,
+    slot_probs_by_stop: dict[str, dict[str, float]] | None = None,
 ) -> list[RouteDetail]:
     """Assemble per-stop geometry for the frontend map from a solved result."""
     details: list[RouteDetail] = []
@@ -196,6 +204,15 @@ def _build_route_detail(
                         predicted_probs.get(route_stop.stop_id, 0.5), 4
                     ),
                     outcome=outcomes.get(route_stop.stop_id, "success"),
+                    address=(address_by_stop or {}).get(route_stop.stop_id, ""),
+                    address_type=stop.address_type,
+                    floor=stop.floor,
+                    slot_probs={
+                        s: round(p, 4)
+                        for s, p in (slot_probs_by_stop or {})
+                        .get(route_stop.stop_id, {})
+                        .items()
+                    },
                 )
             )
         details.append(
@@ -215,6 +232,7 @@ def _build_baseline_routes(
     depot_lon: float,
     stops: list[OptStop],
     vehicles: list[OptVehicle],
+    time_limit_seconds: int = 10,
 ) -> OptResult:
     """Build baseline FIFO routes — assign stops sequentially to vehicles.
 
@@ -245,7 +263,7 @@ def _build_baseline_routes(
         depot_lon,
         uniform_stops,
         vehicles,
-        time_limit_seconds=10,
+        time_limit_seconds=time_limit_seconds,
     )
 
 
@@ -259,6 +277,7 @@ async def run_simulation(
     depot_lat: float = 35.672,
     depot_lon: float = 139.817,
     detailed: bool = False,
+    solver_time_limit_seconds: int | None = None,
 ) -> SimulationResult:
     """Run a single simulation comparing baseline vs Takumi routing.
 
@@ -323,6 +342,8 @@ async def run_simulation(
     takumi_slot: dict[str, str] = {}
     baseline_pred: dict[str, float] = {}
     takumi_pred: dict[str, float] = {}
+    address_by_stop: dict[str, str] = {}
+    slot_probs_by_stop: dict[str, dict[str, float]] = {}
     opt_stops: list[OptStop] = []
 
     for i, stop in enumerate(synth_stops):
@@ -338,6 +359,8 @@ async def run_simulation(
             for s in _SLOT_CODES
         }
         best_slot = max(slot_predictions, key=lambda s: slot_predictions[s])
+        address_by_stop[sid] = stop["address"]
+        slot_probs_by_stop[sid] = slot_predictions
 
         # Baseline: carrier's fixed default window for everyone.
         baseline_slot[sid] = slot_code
@@ -376,11 +399,18 @@ async def run_simulation(
     ]
 
     # 4. Run baseline (uniform penalties)
+    baseline_limit = (
+        solver_time_limit_seconds if solver_time_limit_seconds is not None else 10
+    )
+    takumi_limit = (
+        solver_time_limit_seconds if solver_time_limit_seconds is not None else 15
+    )
     baseline_result = _build_baseline_routes(
         depot_lat,
         depot_lon,
         opt_stops,
         vehicles,
+        time_limit_seconds=baseline_limit,
     )
 
     # 5. Run Takumi (ML-driven penalties)
@@ -389,7 +419,7 @@ async def run_simulation(
         depot_lon,
         opt_stops,
         vehicles,
-        time_limit_seconds=15,
+        time_limit_seconds=takumi_limit,
     )
 
     # 6. Simulate delivery outcomes (same random draws for both)
@@ -449,6 +479,8 @@ async def run_simulation(
             baseline_slot,
             baseline_pred,
             baseline_outcomes,
+            address_by_stop=address_by_stop,
+            slot_probs_by_stop=slot_probs_by_stop,
         )
         result.takumi_routes = _build_route_detail(
             takumi_result,
@@ -456,6 +488,8 @@ async def run_simulation(
             takumi_slot,
             takumi_pred,
             takumi_outcomes,
+            address_by_stop=address_by_stop,
+            slot_probs_by_stop=slot_probs_by_stop,
         )
 
     logger.info(

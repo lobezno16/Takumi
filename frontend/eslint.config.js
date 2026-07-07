@@ -23,6 +23,11 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       ...security.configs.recommended.rules,
+      // Fires on every computed member access; all our dynamic keys are
+      // internal constant tables (slot-code maps, color palettes, loop
+      // indexes), never user input. Kept off to keep the remaining
+      // security rules enforceable at --max-warnings 0.
+      'security/detect-object-injection': 'off',
     },
   },
 );

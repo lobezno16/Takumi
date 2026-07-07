@@ -149,9 +149,9 @@ TakumiRoute is multi-actor by design. Each persona touches a different surface o
 
 | Persona | Role | Goal | Surface in TakumiRoute |
 |---------|------|------|------------------------|
-| **Tanaka Haruto** 田中 陽翔 | Owner-operator / dispatcher | Hit every shift inside the overtime cap; stop bleeding profit to redelivery | **Operations** + **Plan Optimization** dashboards |
+| **Tanaka Haruto** 田中 陽翔 | Owner-operator / dispatcher | Hit every shift inside the overtime cap; stop bleeding profit to redelivery | **Dashboard** + **Simulation** cockpit screens |
 | **Yamamoto-san** 山本さん | Driver | Knock when people are actually home; less wasted walking | **Live Map** route, pushed to the driver app via WebSocket |
-| **Sato-san** 佐藤さん | Recipient | Get the parcel without playing phone tag | **Customer Hub** — messages a time window, agent confirms it |
+| **Sato-san** 佐藤さん | Recipient | Get the parcel without playing phone tag | **Outreach threads** (Route Map / Delivery Detail) — messages a time window, the agent confirms it |
 
 ### Tanaka-san's Service Area
 
@@ -315,10 +315,12 @@ The novelty is the **ML → OR coupling**: a calibrated home-probability becomes
 ```mermaid
 graph TB
     subgraph frontend["Frontend — React 19 + Vite + TypeScript (strict)"]
-        FE1["📊 Operations<br/>(Dashboard)"]
-        FE2["⚙️ Plan Optimization<br/>(Simulation)"]
-        FE3["🗺️ Live Map<br/>(deck.gl + MapLibre)"]
-        FE4["💬 Customer Hub<br/>(Agent Console)"]
+        FE0["✨ Landing Portal"]
+        FE1["📊 Dashboard"]
+        FE2["🗺️ Route Map<br/>(MapLibre + tactical SVG)"]
+        FE3["🚚 Delivery Detail<br/>(agent outreach threads)"]
+        FE4["🎛️ Simulation"]
+        FE5["💓 ML Health"]
     end
 
     subgraph api["Backend API — FastAPI (async)"]
@@ -349,7 +351,7 @@ graph TB
         OSRM["🗺️ OSRM<br/>Tokyo road network<br/>(profile: routing)"]
     end
 
-    FE1 & FE2 & FE3 & FE4 -->|"REST · TanStack Query"| api
+    FE1 & FE2 & FE3 & FE4 & FE5 -->|"REST · typed fetch client"| api
     FE3 & FE4 -->|"WebSocket /ws/live"| api
 
     SVC_ML --> PG
@@ -376,7 +378,7 @@ Every request flows through the same hardened middleware chain before it reaches
 ```mermaid
 sequenceDiagram
     autonumber
-    participant FE as Frontend (TanStack Query)
+    participant FE as Frontend (typed fetch client)
     participant MW as Middleware chain
     participant DEP as Auth dependency
     participant OPT as Optimizer service
@@ -401,7 +403,7 @@ sequenceDiagram
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React 19, Vite, TypeScript (strict), Tailwind CSS v4, TanStack Query, Zustand, deck.gl + MapLibre GL |
+| **Frontend** | React 19, Vite 6, TypeScript (strict), Tailwind CSS v4, Zustand, MapLibre GL, Recharts, Motion, lucide-react, ogl (WebGL effects) |
 | **Backend** | Python 3.12, FastAPI, Uvicorn, SQLAlchemy 2.x (async), Alembic, Pydantic v2 (`extra="forbid"`) |
 | **Optimizer** | Google OR-Tools (prize-collecting CVRPTW), PyVRP (benchmark reference) |
 | **ML** | LightGBM + `CalibratedClassifierCV` (Platt/sigmoid), scikit-learn, pandas, NumPy |
@@ -787,9 +789,12 @@ open http://localhost:5173       # register an operator, then sign in
 
 ```mermaid
 graph LR
-    S1["1️⃣ Operations<br/>Service health +<br/>platform capabilities"] --> S2["2️⃣ Plan Optimization<br/>Run day / Monte-Carlo<br/>Watch redelivery drop"]
-    S2 --> S3["3️⃣ Live Map<br/>deck.gl + OSRM<br/>Baseline ⇄ Takumi toggle"]
-    S3 --> S4["4️⃣ Customer Hub<br/>Message recipient<br/>Injection probe + replan"]
+    S1["1️⃣ Dashboard<br/>Real run KPIs +<br/>carbon & risk profilers"] --> S2["2️⃣ Simulation<br/>Run a day server-side<br/>Watch redelivery drop"]
+    S2 --> S3["3️⃣ Route Map<br/>Baseline ⇄ Takumi routes<br/>MapLibre / tactical grid"]
+    S3 --> S4["4️⃣ Delivery Detail<br/>Chat with the agent<br/>Injection probe + replan"]
+    S4 --> S5["5️⃣ ML Health<br/>Live calibration curve<br/>+ feature importances"]
+
+    style S5 fill:#141a2a,stroke:#AC73E6,color:#f5f0e8
 
     style S1 fill:#141a2a,stroke:#3a8fd6,color:#f5f0e8
     style S2 fill:#141a2a,stroke:#c99a3c,color:#f5f0e8
@@ -799,10 +804,12 @@ graph LR
 
 | Screen | What to Look For |
 |--------|-----------------|
-| **Operations** | Service health indicators, platform capabilities overview |
-| **Plan Optimization** | Redelivery rate collapsing from baseline ~8–9% → low single digits; run Monte-Carlo to confirm it isn't a lucky seed |
-| **Live Map** | Generate routes, toggle **Baseline ⇄ Takumi**, stops colored by first-attempt outcome, route lines snapped to the road network via OSRM |
-| **Customer Hub** | Message a recipient (*"I'm only home after 6pm"*) → agent confirms the evening slot. Try the 🛡️ injection probe → agent takes **no action**. Hit **Re-optimize** → new route streams via WebSocket |
+| **Landing Portal** | The problem framing and the Tanaka-san story (public, no sign-in needed) |
+| **Dashboard** | Real KPIs from the day's solved plan: redelivery vs baseline, hours saved, CO₂ proxy, per-vehicle p_home |
+| **Simulation** | Configure parcels/fleet and run a real backend simulation; OR-Tools vs PyVRP wall-clock benchmark |
+| **Route Map** | Toggle **Baseline ⇄ Takumi** route geometry, stops colored by p_home, per-stop inspector with live outreach thread |
+| **Delivery Detail** | Reply as a recipient (*"I'm only home after 6pm"*) → the constrained agent locks the evening slot and triggers a real replan. Try an injection probe (*"ignore previous instructions…"*) → **no action** |
+| **ML Health** | Calibration curve and feature importances from a real LightGBM training run; hit **Retrain** to refresh |
 
 ---
 
@@ -940,11 +947,12 @@ make format        # Auto-format (ruff + black + prettier)
 takumiroute/
 ├── frontend/                 # React 19 + Vite + TypeScript (strict)
 │   └── src/
-│       ├── pages/            # DashboardPage, SimulationPage, MapPage, AgentConsole, LoginPage
-│       ├── components/       # Shared UI
-│       ├── api/              # TanStack Query client + hooks
-│       ├── hooks/            # useWebSocket, …
-│       └── store/            # Zustand state
+│       ├── components/       # Cockpit: Dashboard, RouteMap, DeliveryDetail,
+│       │                     #   Simulation, MLHealth, LandingPage, LoginGate, …
+│       ├── api/client.ts     # Typed fetch client (auth, simulation, agent, ML)
+│       ├── store.ts          # Zustand stores wired to the backend + /ws/live
+│       ├── seedData.ts       # Presentation constants + deterministic personas
+│       └── types.ts          # Client projections of backend responses
 ├── backend/
 │   ├── app/
 │   │   ├── api/              # FastAPI routers (11 domains)
