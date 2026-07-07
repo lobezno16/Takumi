@@ -137,11 +137,15 @@ export function recipientNameFor(stopId: string): string {
   return JAPANESE_NAMES[hashString(stopId) % JAPANESE_NAMES.length];
 }
 
+// At Tokyo's latitude a degree of longitude spans ~cos(35.66°) of a degree
+// of latitude, so scale Δlng before comparing distances.
+const LNG_SCALE = Math.cos((35.66 * Math.PI) / 180);
+
 export function districtFor(lng: number, lat: number): string {
   let best = DISTRICTS[0];
   let bestDist = Infinity;
   for (const d of DISTRICTS) {
-    const dist = (d.lng - lng) ** 2 + (d.lat - lat) ** 2;
+    const dist = ((d.lng - lng) * LNG_SCALE) ** 2 + (d.lat - lat) ** 2;
     if (dist < bestDist) {
       bestDist = dist;
       best = d;

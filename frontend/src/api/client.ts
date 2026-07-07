@@ -10,6 +10,7 @@ const API_BASE = '/api';
 // ── Token storage ────────────────────────────────────────────────────
 
 let authToken: string | null = localStorage.getItem('takumi_token');
+let refreshToken: string | null = localStorage.getItem('takumi_refresh');
 
 export function setToken(token: string | null) {
   authToken = token;
@@ -20,8 +21,25 @@ export function setToken(token: string | null) {
   }
 }
 
+export function setRefreshToken(token: string | null) {
+  refreshToken = token;
+  if (token) {
+    localStorage.setItem('takumi_refresh', token);
+  } else {
+    localStorage.removeItem('takumi_refresh');
+  }
+}
+
 export function getToken(): string | null {
   return authToken;
+}
+
+// Invoked when the session cannot be recovered (refresh failed) so the UI
+// can drop back to the sign-in gate. Registered by the auth store to avoid
+// a circular import.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler;
 }
 
 export class ApiError extends Error {
@@ -32,7 +50,7 @@ export class ApiError extends Error {
   }
 }
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+async function rawFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string>),
@@ -42,11 +60,52 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { detail?: string };
-    if (res.status === 401) setToken(null);
     throw new ApiError(res.status, body.detail || `API error ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+// Single-flight refresh: concurrent 401s share one refresh round-trip.
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefresh(): Promise<boolean> {
+  if (!refreshToken) return false;
+  refreshInFlight ??= (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!res.ok) return false;
+      const data = (await res.json()) as { access_token: string };
+      setToken(data.access_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  try {
+    return await rawFetch<T>(path, options);
+  } catch (e) {
+    // Expired access token: refresh once and retry the original request.
+    if (e instanceof ApiError && e.status === 401 && !path.startsWith('/auth/')) {
+      if (await tryRefresh()) {
+        return rawFetch<T>(path, options);
+      }
+      setToken(null);
+      setRefreshToken(null);
+      onUnauthorized?.();
+    }
+    throw e;
+  }
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────
@@ -59,6 +118,7 @@ export interface UserResponse {
 
 interface TokenResponse {
   access_token: string;
+  refresh_token: string | null;
   token_type: string;
 }
 
@@ -68,6 +128,7 @@ export async function login(email: string, password: string): Promise<void> {
     body: JSON.stringify({ email, password }),
   });
   setToken(data.access_token);
+  setRefreshToken(data.refresh_token ?? null);
 }
 
 export async function register(email: string, password: string): Promise<UserResponse> {
@@ -83,6 +144,7 @@ export async function fetchMe(): Promise<UserResponse> {
 
 export function logout() {
   setToken(null);
+  setRefreshToken(null);
   window.location.reload();
 }
 

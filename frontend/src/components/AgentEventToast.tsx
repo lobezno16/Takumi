@@ -49,7 +49,7 @@ export default function AgentEventToast() {
   };
 
   const handleReview = () => {
-    if (toast.delivery_id && toast.delivery_id !== "GLOBAL-OPT" && toast.delivery_id !== "GLOBAL-CONF") {
+    if (toast.delivery_id.startsWith("DEL-")) {
       setSelectedDeliveryId(toast.delivery_id);
       setCurrentPage("deliveries");
     }
@@ -101,7 +101,7 @@ export default function AgentEventToast() {
           </div>
 
           {/* Action button if delivery-specific */}
-          {toast.delivery_id && toast.delivery_id !== "GLOBAL-OPT" && toast.delivery_id !== "GLOBAL-CONF" && (
+          {toast.delivery_id.startsWith("DEL-") && (
             <button
               id={`review-toast-btn-${toast.id}`}
               onClick={handleReview}

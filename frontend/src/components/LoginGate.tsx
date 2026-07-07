@@ -70,6 +70,7 @@ export default function LoginGate() {
                 type="email"
                 autoComplete="email"
                 required
+                maxLength={320}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="operator@tanaka-express.jp"
@@ -90,6 +91,7 @@ export default function LoginGate() {
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 required
                 minLength={8}
+                maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

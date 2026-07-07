@@ -409,7 +409,7 @@ export default function Dashboard() {
             {/* Event rows */}
             <div className="flex-1 overflow-y-auto max-h-64 pr-1 space-y-2">
               {events.slice(0, 10).map((evt) => {
-                const isNavigable = evt.delivery_id && evt.delivery_id !== "GLOBAL-OPT" && evt.delivery_id !== "GLOBAL-CONF";
+                const isNavigable = evt.delivery_id.startsWith("DEL-");
                 return (
                   <div
                     id={`feed-item-${evt.id}`}

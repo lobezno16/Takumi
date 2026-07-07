@@ -52,7 +52,6 @@ interface MappedDay {
 /** Project the backend's detailed simulation into cockpit view models. */
 function mapDetailedResult(detail: api.DetailedSimulationResult): MappedDay {
   const depot: [number, number] = [detail.depot_lon, detail.depot_lat];
-  const baselineByIndex = new Map(detail.baseline_routes.map((r) => [r.vehicle_index, r]));
 
   const vehicles: Vehicle[] = [];
   const deliveries: Delivery[] = [];
@@ -65,7 +64,11 @@ function mapDetailedResult(detail: api.DetailedSimulationResult): MappedDay {
       ...route.stops.map((s): [number, number] => [s.longitude, s.latitude]),
       depot,
     ];
-    const baseline = baselineByIndex.get(route.vehicle_index);
+    // Baseline and Takumi are independent solves, so the solver's vehicle
+    // indexes don't correspond (e.g. Takumi may use v5–v7 while baseline
+    // uses v0–v2). Pair positionally: nth displayed vehicle gets the nth
+    // baseline route for its comparison overlay.
+    const baseline = detail.baseline_routes[idx];
     const baselineCoords: [number, number][] = baseline
       ? [depot, ...baseline.stops.map((s): [number, number] => [s.longitude, s.latitude]), depot]
       : coords;
@@ -150,6 +153,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
   isSubmitting: false,
 
   checkAuth: async () => {
+    // If the session can't be recovered (refresh failed), fall back to the
+    // sign-in gate instead of letting every call fail silently.
+    api.setUnauthorizedHandler(() => {
+      set({ user: null, authChecked: true });
+    });
     if (!api.getToken()) {
       set({ authChecked: true, user: null });
       return;

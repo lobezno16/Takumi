@@ -36,7 +36,9 @@ class SlotResponse(BaseModel):
 
 class UserCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: str = Field(max_length=320)
+    # Light RFC-shaped check: local@domain.tld — full validation happens via
+    # the verification loop in production; this blocks obvious garbage.
+    email: str = Field(max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: str = Field(min_length=8, max_length=128)
     # Optional tenant name; a new organization is created per registration.
     organization_name: str | None = Field(default=None, max_length=200)
